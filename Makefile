@@ -255,3 +255,59 @@ endif
 .PHONY: build-react-native-android
 build-react-native-android:
 	$(DOCKER_CMD) build -f src/react-native-app/android.Dockerfile --platform=linux/amd64 --output=. src/react-native-app
+
+# --- Monoscope Kubernetes deployment ---------------------------------------
+# Apply the Monoscope OTel collector Helm releases (DaemonSet agent + cluster
+# Deployment) defined in monoscope-k8s/. The MONOSCOPE_API_KEY must be set in
+# the environment — it's stored in a k8s Secret, never written to disk.
+#
+# Example:
+#   MONOSCOPE_API_KEY=xxx make k8s-apply-monoscope
+
+K8S_NAMESPACE ?= default
+
+.PHONY: k8s-apply-monoscope
+k8s-apply-monoscope:
+ifndef MONOSCOPE_API_KEY
+	$(error MONOSCOPE_API_KEY is not set. Export it or pass MONOSCOPE_API_KEY=... to make)
+endif
+	@echo "→ Adding/updating open-telemetry helm repo"
+	@helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts >/dev/null 2>&1 || true
+	@helm repo update open-telemetry >/dev/null
+	@echo "→ Upserting monoscope-secrets in namespace $(K8S_NAMESPACE)"
+	@kubectl create secret generic monoscope-secrets \
+	  --namespace $(K8S_NAMESPACE) \
+	  --from-literal=api-key='$(MONOSCOPE_API_KEY)' \
+	  --dry-run=client -o yaml | kubectl apply -f -
+	@echo "→ Installing/upgrading agent (DaemonSet)"
+	helm upgrade --install monoscope-agent open-telemetry/opentelemetry-collector \
+	  --namespace $(K8S_NAMESPACE) --values monoscope-k8s/values-agent.yaml
+	@echo "→ Installing/upgrading cluster collector (Deployment)"
+	helm upgrade --install monoscope-cluster open-telemetry/opentelemetry-collector \
+	  --namespace $(K8S_NAMESPACE) --values monoscope-k8s/values-cluster.yaml
+	@echo ""
+	@echo "Monoscope collectors deployed. Verify with:"
+	@echo "  kubectl get pods -l 'app.kubernetes.io/instance in (monoscope-agent,monoscope-cluster)'"
+	@echo "  monoscope events search 'resource.k8s.cluster.uid != \"\"' --since 5m --limit 1"
+
+.PHONY: k8s-delete-monoscope
+k8s-delete-monoscope:
+	-helm uninstall monoscope-agent --namespace $(K8S_NAMESPACE)
+	-helm uninstall monoscope-cluster --namespace $(K8S_NAMESPACE)
+	-kubectl delete secret monoscope-secrets --namespace $(K8S_NAMESPACE)
+
+# Patch the otel-demo helm release so its bundled otel-collector fans
+# traces/metrics/logs out to monoscope alongside the in-cluster sinks.
+# Requires the monoscope-secrets secret (run `make k8s-apply-monoscope` first).
+.PHONY: k8s-apply-otel-demo-overlay
+k8s-apply-otel-demo-overlay:
+	@helm get values otel-demo --namespace $(K8S_NAMESPACE) >/dev/null 2>&1 || \
+	  (echo "otel-demo release not found in $(K8S_NAMESPACE); install it first" && exit 1)
+	@kubectl get secret monoscope-secrets --namespace $(K8S_NAMESPACE) >/dev/null 2>&1 || \
+	  (echo "monoscope-secrets not found; run 'make k8s-apply-monoscope' first" && exit 1)
+	@echo "Note: --reset-values clears any stale monoscope-related values"
+	@echo "from prior overlay revisions; the chart's vanilla defaults plus"
+	@echo "monoscope-k8s/otel-demo-overlay.yaml become the new state."
+	helm upgrade otel-demo open-telemetry/opentelemetry-demo \
+	  --namespace $(K8S_NAMESPACE) --reset-values \
+	  --values monoscope-k8s/otel-demo-overlay.yaml

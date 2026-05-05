@@ -1,0 +1,47 @@
+# Overlay applied on top of the otel-demo chart values to fan the bundled
+# otel-collector's traces / metrics / logs out to the in-cluster
+# monoscope-agent collector — which is the component that holds the API
+# key secret and forwards to monoscope.tech. The bundled collector itself
+# stays vanilla: no secrets, no x-api-key, no auth concerns.
+#
+# Apply:
+#   helm upgrade otel-demo open-telemetry/opentelemetry-demo \
+#     --reset-values --values monoscope-k8s/otel-demo-overlay.yaml
+#
+# (--reset-values clears any previous user-supplied values so the bundled
+# collector returns to chart defaults plus only what's added here.)
+
+opentelemetry-collector:
+  # Run the bundled collector as a singleton Deployment instead of the chart's
+  # default DaemonSet. The chart-default daemonset binds host ports (jaeger
+  # receivers on 6831/14250/14268) that would collide with the monoscope-agent
+  # daemonset. A singleton has no host-level needs for this demo.
+  mode: deployment
+
+  config:
+    exporters:
+      # In-cluster forward to the monoscope-agent DaemonSet. The agent has
+      # internalTrafficPolicy: Local, so OTLP requests stay on-node when
+      # possible. The agent attaches x-api-key and exports to monoscope.tech.
+      otlp/monoscope-agent:
+        endpoint: monoscope-agent-opentelemetry-collector.default.svc.cluster.local:4317
+        tls:
+          insecure: true
+
+    service:
+      pipelines:
+        # Append otlp/monoscope-agent to each pipeline's existing exporters.
+        # The chart merges receivers/processors but replaces pipeline arrays,
+        # so we re-list the chart-default exporters here verbatim. If the
+        # chart updates its defaults, this list must be re-synced (check
+        # `helm show values open-telemetry/opentelemetry-demo`).
+        traces:
+          exporters: [otlp/jaeger, debug, spanmetrics, otlp/monoscope-agent]
+        metrics:
+          exporters: [otlphttp/prometheus, debug, otlp/monoscope-agent]
+        # Logs intentionally NOT forwarded to monoscope-agent here — the agent
+        # already captures every container's stdout via filelog from
+        # /var/log/pods. Forwarding OTLP logs too would double-count any app
+        # that uses both stdout and the OTel logger SDK (e.g. cart).
+        logs:
+          exporters: [opensearch, debug]
