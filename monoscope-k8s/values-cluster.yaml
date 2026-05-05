@@ -1,0 +1,65 @@
+mode: deployment
+replicaCount: 1
+
+image:
+  repository: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-k8s
+  tag: "0.149.0"
+
+presets:
+  clusterMetrics:
+    enabled: true
+  kubernetesEvents:
+    enabled: true
+  kubernetesAttributes:
+    enabled: true
+
+extraEnvs:
+  - name: MONOSCOPE_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: monoscope-secrets
+        key: api-key
+
+config:
+  extensions:
+    health_check:
+      endpoint: 0.0.0.0:13133
+
+  receivers:
+    k8s_cluster:
+      collection_interval: 10s
+    k8s_events:
+      namespaces: []
+
+  processors:
+    batch: {}
+    memory_limiter:
+      check_interval: 1s
+      limit_mib: 1000
+      spike_limit_mib: 200
+    k8s_attributes:
+      auth_type: serviceAccount
+      passthrough: false
+    resource:
+      attributes:
+        - key: x-api-key
+          value: ${env:MONOSCOPE_API_KEY}
+          action: upsert
+
+  exporters:
+    otlp_grpc:
+      endpoint: "otelcol.monoscope.tech:4317"
+      tls:
+        insecure: true
+
+  service:
+    extensions: [health_check]
+    pipelines:
+      metrics:
+        receivers: [k8s_cluster]
+        processors: [k8s_attributes, memory_limiter, batch, resource]
+        exporters: [otlp_grpc]
+      logs:
+        receivers: [k8s_events]
+        processors: [k8s_attributes, memory_limiter, batch, resource]
+        exporters: [otlp_grpc]
