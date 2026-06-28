@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 
-FROM docker.io/library/python:3.14-alpine3.23 AS build-venv
+FROM docker.io/library/python:3.14.6-alpine3.23@sha256:54d4310f06b22ce510cf058653729b257e161e0e13e01bf934553bee6550b9a7 AS build-venv
 
 RUN apk update && \
     apk add gcc g++ linux-headers
@@ -10,11 +10,11 @@ RUN apk update && \
 COPY ./src/recommendation/requirements.txt requirements.txt
 
 RUN python -m venv venv && \
-    venv/bin/pip install --no-cache-dir -r requirements.txt
+    venv/bin/pip install --no-cache-dir --require-hashes -r requirements.txt
 
 RUN venv/bin/opentelemetry-bootstrap -a install
 
-FROM docker.io/library/python:3.14-alpine3.23
+FROM docker.io/library/python:3.14.6-alpine3.23@sha256:54d4310f06b22ce510cf058653729b257e161e0e13e01bf934553bee6550b9a7
 
 COPY --from=build-venv /venv/ /venv/
 
