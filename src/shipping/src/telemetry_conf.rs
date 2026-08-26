@@ -4,13 +4,17 @@
 use anyhow::Result;
 use opentelemetry::global;
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
+use opentelemetry_otlp::{Protocol, WithExportConfig};
 use opentelemetry_sdk::logs::SdkLoggerProvider;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::trace::SdkTracerProvider;
+use tracing_subscriber::fmt;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 
-use opentelemetry_resource_detectors::{OsResourceDetector, ProcessResourceDetector};
+use opentelemetry_resource_detectors::{
+    HostResourceDetector, OsResourceDetector, ProcessResourceDetector,
+};
 use opentelemetry_sdk::{
     propagation::TraceContextPropagator, resource::ResourceDetector, Resource,
 };
@@ -22,6 +26,7 @@ fn get_resource() -> Resource {
     RESOURCE
         .get_or_init(|| {
             let detectors: Vec<Box<dyn ResourceDetector>> = vec![
+                Box::new(HostResourceDetector::default()),
                 Box::new(OsResourceDetector),
                 Box::new(ProcessResourceDetector),
             ];
@@ -38,7 +43,8 @@ fn init_tracer_provider() -> SdkTracerProvider {
         .with_resource(get_resource())
         .with_batch_exporter(
             opentelemetry_otlp::SpanExporter::builder()
-                .with_tonic()
+                .with_http()
+                .with_protocol(Protocol::HttpBinary)
                 .build()
                 .expect("Failed to initialize tracing provider"),
         )
@@ -53,7 +59,8 @@ fn init_meter_provider() -> SdkMeterProvider {
         .with_resource(get_resource())
         .with_periodic_exporter(
             opentelemetry_otlp::MetricExporter::builder()
-                .with_tonic()
+                .with_http()
+                .with_protocol(Protocol::HttpBinary)
                 .build()
                 .expect("Failed to initialize metric exporter"),
         )
@@ -68,7 +75,8 @@ fn init_logger_provider() -> SdkLoggerProvider {
         .with_resource(get_resource())
         .with_batch_exporter(
             opentelemetry_otlp::LogExporter::builder()
-                .with_tonic()
+                .with_http()
+                .with_protocol(Protocol::HttpBinary)
                 .build()
                 .expect("Failed to initialize logger provider"),
         )
@@ -77,8 +85,14 @@ fn init_logger_provider() -> SdkLoggerProvider {
     let otel_layer = OpenTelemetryTracingBridge::new(&logger_provider);
     let filter_otel = EnvFilter::new("info");
     let otel_layer = otel_layer.with_filter(filter_otel);
+    let stdout_layer = fmt::layer()
+        .with_writer(std::io::stdout)
+        .with_filter(EnvFilter::new("info"));
 
-    tracing_subscriber::registry().with(otel_layer).init();
+    tracing_subscriber::registry()
+        .with(otel_layer)
+        .with(stdout_layer)
+        .init();
 
     logger_provider
 }

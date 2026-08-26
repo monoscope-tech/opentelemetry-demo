@@ -146,6 +146,13 @@ else
 	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) $(DOCKER_COMPOSE_FILES) build
 endif
 
+# Build all services including the agentic layer (agent, mcp, chatbot).
+# Used by the agentic CI workflow so those images are present when
+# make run-telemetry-tests-agentic loads them from the artifact.
+.PHONY: build-agentic
+build-agentic:
+	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) $(DOCKER_COMPOSE_FILES) $(DOCKER_COMPOSE_FILES_AGENT) build
+
 .PHONY: build-and-push
 build-and-push:
 	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) $(DOCKER_COMPOSE_FILES) build --push
@@ -184,14 +191,9 @@ clean-images:
         false; \
     fi
 
-.PHONY: run-tests
-run-tests:
+.PHONY: run-frontend-tests
+run-frontend-tests:
 	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) $(DOCKER_COMPOSE_FILES) $(DOCKER_COMPOSE_FILES_TESTS) run frontendTests
-	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) $(DOCKER_COMPOSE_FILES) $(DOCKER_COMPOSE_FILES_TESTS) run traceBasedTests
-
-.PHONY: run-tracetesting
-run-tracetesting:
-	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) $(DOCKER_COMPOSE_FILES) $(DOCKER_COMPOSE_FILES_TESTS) run traceBasedTests ${SERVICES_TO_TEST}
 
 .PHONY: run-telemetry-tests
 run-telemetry-tests: start
@@ -230,6 +232,25 @@ run-telemetry-tests-minimal: start-minimal
 	$(MAKE) stop; \
 	exit $$rc
 
+.PHONY: run-telemetry-tests-agentic
+run-telemetry-tests-agentic:
+	$(DOCKER_COMPOSE_CMD) $(DOCKER_COMPOSE_ENV) $(DOCKER_COMPOSE_FILES) $(DOCKER_COMPOSE_FILES_AGENT) up --force-recreate --remove-orphans --detach
+	$(DOCKER_CMD) build -t opentelemetry-demo-telemetry-tests ./test/telemetry
+	@touch .env.override
+	@set +e; \
+	$(DOCKER_CMD) run --rm --network opentelemetry-demo \
+		--env-file .env --env-file .env.override \
+		-e TEST_SCOPE=agentic \
+		-e WARMUP_SECONDS=$${WARMUP_SECONDS:-240} \
+		-e POLL_TIMEOUT=$${POLL_TIMEOUT:-180} \
+		-e WARMUP_PROBE_ENABLED=false \
+		-e WARMUP_PROBE_CHECKOUTS=0 \
+		-e WARMUP_PROBE_TIMEOUT=$${WARMUP_PROBE_TIMEOUT:-120} \
+		opentelemetry-demo-telemetry-tests; \
+	rc=$$?; \
+	$(MAKE) stop; \
+	exit $$rc
+
 .PHONY: generate-protobuf
 generate-protobuf:
 	./ide-gen-proto.sh
@@ -262,7 +283,6 @@ start:
 	@echo "Go to http://localhost:8080 for the demo UI."
 	@echo "Go to http://localhost:8080/jaeger/ui for the Jaeger UI."
 	@echo "Go to http://localhost:8080/grafana/ for the Grafana UI."
-	@echo "Go to http://localhost:8080/loadgen/ for the Load Generator UI."
 	@echo "Go to http://localhost:8080/feature/ to change feature flags."
 	@echo "Go to http://localhost:8080/telemetry/ for the Weaver generated telemetry documentation."
 
@@ -274,7 +294,6 @@ start-minimal:
 	@echo "Go to http://localhost:8080 for the demo UI."
 	@echo "Go to http://localhost:8080/jaeger/ui for the Jaeger UI."
 	@echo "Go to http://localhost:8080/grafana/ for the Grafana UI."
-	@echo "Go to http://localhost:8080/loadgen/ for the Load Generator UI."
 	@echo "Go to http://localhost:8080/feature/ to change feature flags."
 	@echo "Go to http://localhost:8080/telemetry/ for the Weaver generated telemetry documentation."
 
@@ -284,7 +303,6 @@ start-no-o11y:
 	@echo ""
 	@echo "OpenTelemetry Demo is running (no observability stack)."
 	@echo "Go to http://localhost:8080 for the demo UI."
-	@echo "Go to http://localhost:8080/loadgen/ for the Load Generator UI."
 	@echo "Go to http://localhost:8080/feature/ to change feature flags."
 	@echo "Go to http://localhost:8080/telemetry/ for the Weaver generated telemetry documentation."
 
@@ -294,7 +312,6 @@ start-minimal-no-o11y:
 	@echo ""
 	@echo "OpenTelemetry Demo in minimal mode is running (no observability stack)."
 	@echo "Go to http://localhost:8080 for the demo UI."
-	@echo "Go to http://localhost:8080/loadgen/ for the Load Generator UI."
 	@echo "Go to http://localhost:8080/feature/ to change feature flags."
 	@echo "Go to http://localhost:8080/telemetry/ for the Weaver generated telemetry documentation."
 
@@ -306,7 +323,6 @@ start-profiling:
 	@echo "Go to http://localhost:8080 for the demo UI."
 	@echo "Go to http://localhost:8080/jaeger/ui for the Jaeger UI."
 	@echo "Go to http://localhost:8080/grafana/ for the Grafana UI."
-	@echo "Go to http://localhost:8080/loadgen/ for the Load Generator UI."
 	@echo "Go to http://localhost:8080/profiles/ for the Firepit UI."
 	@echo "Go to http://localhost:8080/telemetry/ for the Weaver generated telemetry documentation."
 
@@ -318,7 +334,6 @@ start-agentic:
 	@echo "Go to http://localhost:8080 for the demo UI."
 	@echo "Go to http://localhost:8080/jaeger/ui for the Jaeger UI."
 	@echo "Go to http://localhost:8080/grafana/ for the Grafana UI."
-	@echo "Go to http://localhost:8080/loadgen/ for the Load Generator UI."
 	@echo "Go to http://localhost:8080/feature/ to change feature flags."
 	@echo "Go to http://localhost:8080/telemetry/ for the Weaver generated telemetry documentation."
 	@echo "Go to http://localhost:8080/chatbot/ for interacting with demo application using an agent."

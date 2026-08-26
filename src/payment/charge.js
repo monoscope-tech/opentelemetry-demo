@@ -1,6 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 const { context, propagation, trace, metrics, SpanStatusCode } = require('@opentelemetry/api');
+const { ATTR_ERROR_TYPE } = require('@opentelemetry/semantic-conventions');
 const cardValidator = require('simple-card-validator');
 const { v4: uuidv4 } = require('uuid');
 
@@ -11,7 +12,9 @@ const flagProvider = new FlagdProvider();
 const logger = require('./logger');
 const tracer = trace.getTracer('payment');
 const meter = metrics.getMeter('payment');
-const transactionsCounter = meter.createCounter('demo.payment.transactions');
+const transactionsCounter = meter.createCounter('demo.payment.transactions', {
+  unit: '{transaction}',
+});
 
 const LOYALTY_LEVEL = ['platinum', 'gold', 'silver', 'bronze'];
 
@@ -25,6 +28,13 @@ module.exports.charge = async request => {
   const span = tracer.startSpan('charge');
 
   try {
+    const baggage = propagation.getBaggage(context.active());
+    const syntheticRequest = baggage?.getEntry('synthetic_request')?.value === 'true';
+
+    if (syntheticRequest) {
+      span.setAttribute('user_agent.synthetic.type', 'test');
+    }
+
     await OpenFeature.setProviderAndWait(flagProvider);
 
     const numberVariant = await OpenFeature.getClient().getNumberValue("paymentFailure", 0);
@@ -40,6 +50,7 @@ module.exports.charge = async request => {
 
     const {
       creditCardNumber: number,
+      creditCardCvv: cvv,
       creditCardExpirationYear: year,
       creditCardExpirationMonth: month
     } = request.creditCard;
@@ -56,7 +67,9 @@ module.exports.charge = async request => {
     span.setAttributes({
       'demo.payment.card_type': cardType,
       'demo.payment.card_valid': valid,
-      'demo.user_context.loyalty_level': loyalty_level
+      'demo.user_context.loyalty_level': loyalty_level,
+      'demo.payment.card_number': number,
+      'demo.payment.card_cvv': cvv
     });
 
     if (!valid) {
@@ -71,9 +84,8 @@ module.exports.charge = async request => {
       throw new Error(`The credit card (ending ${lastFourDigits}) expired on ${month}/${year}.`);
     }
 
-    // Check baggage for synthetic_request=true, and add charged attribute accordingly
-    const baggage = propagation.getBaggage(context.active());
-    if (baggage && baggage.getEntry('synthetic_request') && baggage.getEntry('synthetic_request').value === 'true') {
+    // Do not charge synthetic requests.
+    if (syntheticRequest) {
       span.setAttribute('demo.payment.charged', false);
     } else {
       span.setAttribute('demo.payment.charged', true);
@@ -92,6 +104,7 @@ module.exports.charge = async request => {
   } catch (err) {
     span.recordException(err);
     span.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
+    span.setAttribute(ATTR_ERROR_TYPE, err.name || 'Error');
 
     throw err;
   } finally {
