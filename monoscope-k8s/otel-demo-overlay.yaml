@@ -11,12 +11,41 @@
 # (--reset-values clears any previous user-supplied values so the bundled
 # collector returns to chart defaults plus only what's added here.)
 
+# Prometheus: the chart caps server memory at 400Mi, but with 7d retention +
+# exemplar-storage (exemplars stream in from the spanmetrics connector) the TSDB
+# head OOMKills within ~1min of becoming ready. The pod had crash-looped 4682×,
+# and EVERY restart replays the WAL — logging one WARN per exemplar record
+# ("Unexpected error when replaying WAL on exemplar record", err="out of order
+# exemplar"), ~34k lines each time. filelog scrapes that stdout (tagged
+# service.name=otel-demo) and floods monoscope. Raising the limit stops the OOM,
+# which stops the restarts, which stops the WAL-replay spam. The exemplar WARNs
+# themselves are benign (Prometheus skips out-of-order exemplars on replay).
+prometheus:
+  server:
+    resources:
+      requests:
+        memory: 512Mi
+      limits:
+        memory: 1536Mi
+
 opentelemetry-collector:
   # Run the bundled collector as a singleton Deployment instead of the chart's
   # default DaemonSet. The chart-default daemonset binds host ports (jaeger
   # receivers on 6831/14250/14268) that would collide with the monoscope-agent
   # daemonset. A singleton has no host-level needs for this demo.
   mode: deployment
+
+  # The chart default (200Mi) is far too low for this collector: besides OTLP it
+  # runs hostmetrics, k8s_cluster, kubeletstats, kafkametrics and the spanmetrics
+  # connector. At ~150Mi/200Mi the memory_limiter (limit 80% / spike 25%) sits
+  # permanently above its soft threshold and refuses incoming data — silently
+  # dropping traces & metrics before the otlp/monoscope-agent exporter sees them
+  # (logs are unaffected: they reach monoscope via the agent's filelog, not here).
+  resources:
+    requests:
+      memory: 256Mi
+    limits:
+      memory: 1Gi
 
   config:
     exporters:
@@ -39,9 +68,15 @@ opentelemetry-collector:
           exporters: [otlp/jaeger, debug, spanmetrics, otlp/monoscope-agent]
         metrics:
           exporters: [otlphttp/prometheus, debug, otlp/monoscope-agent]
-        # Logs intentionally NOT forwarded to monoscope-agent here — the agent
-        # already captures every container's stdout via filelog from
-        # /var/log/pods. Forwarding OTLP logs too would double-count any app
-        # that uses both stdout and the OTel logger SDK (e.g. cart).
+        # Logs ARE forwarded to monoscope-agent. These are the OTLP log records
+        # emitted by the OTel logger SDKs, which carry trace_id/span_id from the
+        # active span — so logs land trace-correlated in monoscope (clickable
+        # span↔log). The stdout copy that filelog scrapes has NO trace context
+        # (it's plain console text), so forwarding OTLP is what enables
+        # correlation. Double-counting is prevented at the OTHER end: the agent's
+        # filelog excludes the pods of every service that emits OTLP logs (see
+        # values-agent.yaml). Uninstrumented services (frontend, llm, flagd,
+        # image-provider, databases, …) emit no OTLP logs, so they keep flowing
+        # via filelog only — no duplication.
         logs:
-          exporters: [opensearch, debug]
+          exporters: [opensearch, debug, otlp/monoscope-agent]

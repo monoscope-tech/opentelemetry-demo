@@ -53,6 +53,42 @@ config:
         http:
           endpoint: 0.0.0.0:4318
 
+    # filelog is created by the logsCollection preset (include: all pods,
+    # operators: container-parser). We override only `exclude` to drop the
+    # stdout of services that ALSO emit OTLP logs — those reach monoscope via
+    # the bundled collector's logs pipeline WITH trace_id/span_id, so scraping
+    # their stdout here would double-count and add a trace-less duplicate.
+    #
+    # The excluded set == every service observed emitting OTLP logs (the OTel
+    # logger SDK / javaagent is wired up). Everything NOT listed (frontend, llm,
+    # flagd, image-provider, postgres, valkey, kafka-ui, grafana, jaeger,
+    # prometheus, opensearch, …) emits no OTLP logs, so filelog stays its only
+    # log source — uninstrumented pod logs are preserved as before.
+    #
+    # Re-sync when adding/removing instrumented services: a service that starts
+    # shipping OTLP logs must be added here, or its logs double up.
+    filelog:
+      exclude:
+        # keep the agent's own self-exclusion (preset default)
+        - /var/log/pods/default_monoscope-agent-opentelemetry-collector*_*/opentelemetry-collector/*.log
+        # services that emit OTLP logs (trace-correlated via the OTLP path)
+        - /var/log/pods/default_accounting-*_*/*/*.log
+        - /var/log/pods/default_ad-*_*/*/*.log
+        - /var/log/pods/default_cart-*_*/*/*.log
+        - /var/log/pods/default_checkout-*_*/*/*.log
+        - /var/log/pods/default_currency-*_*/*/*.log
+        - /var/log/pods/default_email-*_*/*/*.log
+        - /var/log/pods/default_fraud-detection-*_*/*/*.log
+        - /var/log/pods/default_frontend-proxy-*_*/*/*.log
+        - /var/log/pods/default_kafka-*_*/*/*.log
+        - /var/log/pods/default_load-generator-*_*/*/*.log
+        - /var/log/pods/default_payment-*_*/*/*.log
+        - /var/log/pods/default_product-catalog-*_*/*/*.log
+        - /var/log/pods/default_product-reviews-*_*/*/*.log
+        - /var/log/pods/default_quote-*_*/*/*.log
+        - /var/log/pods/default_recommendation-*_*/*/*.log
+        - /var/log/pods/default_shipping-*_*/*/*.log
+
   processors:
     batch: {}
     memory_limiter:
