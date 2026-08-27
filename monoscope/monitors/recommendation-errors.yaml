@@ -1,0 +1,16 @@
+title: Demo — recommendation service errors
+query: 'resource.service.name == "recommendation" and status_code == "ERROR" | summarize count(*) by bin_auto(timestamp)'
+severity: Error
+subject: Recommendation service is returning errors
+message: >-
+  The recommendation service returned more errors than expected in the last
+  15 minutes. Open the trace from the alert to see which product ids were
+  being recommended when it failed.
+alert_threshold: 5
+warning_threshold: 2
+trigger_less_than: false
+check_interval_mins: 5
+time_window_mins: 15
+emails: []
+slack_channels: []
+teams: []

@@ -1,0 +1,16 @@
+title: Demo — ad service errors
+query: 'resource.service.name == "ad" and status_code == "ERROR" | summarize count(*) by bin_auto(timestamp)'
+severity: Warning
+subject: Ad service error rate elevated
+message: >-
+  The ad service is failing a share of requests. The demo drives this
+  deliberately through the adFailure feature flag, so this monitor doubles as
+  a live check that flag-driven failures surface as alerts.
+alert_threshold: 8
+warning_threshold: 3
+trigger_less_than: false
+check_interval_mins: 5
+time_window_mins: 15
+emails: []
+slack_channels: []
+teams: []

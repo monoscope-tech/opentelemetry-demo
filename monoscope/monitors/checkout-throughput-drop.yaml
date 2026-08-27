@@ -1,0 +1,15 @@
+title: Demo — checkout throughput dropped
+query: 'resource.service.name == "checkout" | summarize count(*) by bin_auto(timestamp)'
+severity: Error
+subject: Checkout traffic has stopped
+message: >-
+  Checkout is handling fewer requests than the load generator should be
+  producing. Either the load generator is down or checkout is refusing
+  traffic — check the service map first.
+alert_threshold: 5
+trigger_less_than: true
+check_interval_mins: 10
+time_window_mins: 30
+emails: []
+slack_channels: []
+teams: []
