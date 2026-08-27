@@ -8,7 +8,7 @@ const { ATTR_ERROR_TYPE } = require('@opentelemetry/semantic-conventions')
 
 const charge = require('./charge')
 const logger = require('./logger')
-const { capturePayloads } = require('./monoscope')
+const { observeGrpc } = require('@monoscopetech/common')
 
 async function chargeServiceHandler(call, callback) {
   const span = opentelemetry.trace.getActiveSpan();
@@ -44,8 +44,25 @@ server.addService(health.service, new health.Implementation({
   '': health.servingStatus.SERVING
 }))
 
+// Payload capture comes from the SDK rather than from a hand-written interceptor in this
+// repo: redaction then follows the same JSONPath config every other Monoscope integration
+// takes, and the span contract lives in one place instead of being reproduced per service.
+//
+// The card fields are redacted because this demo is public and the charge request carries a
+// real-looking card. `$..` rather than fixed paths — the card sits at one depth on the request
+// and another where it is echoed back, and a path that misses is indistinguishable from a
+// field that was not there.
 server.addService(otelDemoPackage.oteldemo.PaymentService.service, {
-  charge: capturePayloads('/oteldemo.PaymentService/Charge', chargeServiceHandler),
+  charge: observeGrpc({
+    method: '/oteldemo.PaymentService/Charge',
+    redactRequestBody: [
+      '$..creditCardNumber',
+      '$..creditCardCvv',
+      '$..creditCardExpirationYear',
+      '$..creditCardExpirationMonth',
+    ],
+    redactResponseBody: ['$..creditCardNumber', '$..creditCardCvv'],
+  }, chargeServiceHandler),
 })
 
 
