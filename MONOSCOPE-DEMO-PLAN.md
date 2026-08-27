@@ -434,6 +434,39 @@ ambient tracer, so the demo's own OTel bootstrap and collector routing are untou
 > [monoscope-js#31](https://github.com/monoscope-tech/monoscope-js/pull/31); the duplicate
 > can go once that ships.
 
+### quote: instrumented, then rolled back — it destabilises the service
+
+`apitoolkit-slim` **v2.0.5** (tagged from monoscope-slim#3) removes the unused `php-di ^6.4`
+constraint, so the SDK now installs alongside the `php-di 7.1.1` this service pins through
+slim-bridge. Verified with the Dockerfile's own composer flags. The code is on `main`; the
+deployment is **rolled back**.
+
+Two things went wrong, in order:
+
+1. **Middleware ordering.** Slim's `add()` prepends — the last middleware added is outermost
+   and runs first — so registering after `addRoutingMiddleware()` ran the SDK *before*
+   routing, and it reads `RouteContext` for the matched pattern. Every `POST /getquote`
+   returned 500. Fixed by registering it first, so it sits innermost. Verified against a
+   locally built image: 200 with a real quote, one `apitoolkit-http-span` reaching a debug
+   collector, and the body decoding to `{"numberOfItems":3,"address":"[CLIENT_REDACTED]"}`.
+
+2. **Latency, which the local test could not show.** With the ordering fixed and payload
+   capture working in production, `shipping`'s calls to `/getquote` began timing out at
+   exactly its 5s client deadline: **22 timeouts in the 20 minutes after deploy, zero in the
+   6 hours before**, cascading into `/api/shipping` and `/api/checkout` 500s. Rolling back
+   quote stopped them dead — zero in the following 5 minutes.
+
+The likely mechanism is specific to this service and written into its own source: quote runs
+on **ReactPHP's single-threaded event loop**, and `public/index.php` already carries a
+"workaround for non-async batch processors" that force-flushes the tracer on a timer. Every
+request now carried an extra span with base64 body attributes, so each flush had more to do
+— and a blocking flush on the event loop stalls every concurrent request, not just its own.
+
+**Before retrying**, the thing to change is the export path, not the middleware: give quote a
+non-blocking exporter or a batch processor that does not force-flush on the loop, then
+re-measure the `shipping` → `quote` timeout rate. A single local request cannot surface this;
+the signal is timeout rate under concurrent load.
+
 ### The backends: what a native SDK can and cannot reach
 
 The honest answer is that **most of the demo cannot take a native SDK at all**, because the
