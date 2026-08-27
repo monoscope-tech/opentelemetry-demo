@@ -8,6 +8,7 @@ const { ATTR_ERROR_TYPE } = require('@opentelemetry/semantic-conventions')
 
 const charge = require('./charge')
 const logger = require('./logger')
+const { capturePayloads } = require('./monoscope')
 
 async function chargeServiceHandler(call, callback) {
   const span = opentelemetry.trace.getActiveSpan();
@@ -43,7 +44,9 @@ server.addService(health.service, new health.Implementation({
   '': health.servingStatus.SERVING
 }))
 
-server.addService(otelDemoPackage.oteldemo.PaymentService.service, { charge: chargeServiceHandler })
+server.addService(otelDemoPackage.oteldemo.PaymentService.service, {
+  charge: capturePayloads('/oteldemo.PaymentService/Charge', chargeServiceHandler),
+})
 
 
 let ip = "0.0.0.0";
