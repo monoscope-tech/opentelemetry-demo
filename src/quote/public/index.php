@@ -40,6 +40,28 @@ $container = $containerBuilder->build();
 AppFactory::setContainer($container);
 $app = Bridge::create($container);
 
+// Monoscope: capture request/response payloads on the span.
+//
+// Registered BEFORE the routing and body-parsing middleware, which means it runs AFTER
+// them: Slim's add() prepends, so the last middleware added is the outermost and executes
+// first. This one therefore sits innermost, by which point routing has resolved (the SDK
+// reads RouteContext for the matched pattern — calling it any earlier throws "Cannot
+// create RouteContext before routing has been completed") and the body has been parsed.
+//
+// It composes with the OTel setup already in this service: the middleware takes the ambient
+// tracer from Globals::tracerProvider() and adds no exporter of its own.
+//
+// Redaction is by JSONPath and runs before the body reaches the span. The quote service
+// receives shipping dimensions and an address; the address is a real one, so it is redacted
+// rather than shipped.
+$app->add(new \APIToolkit\APIToolkitMiddleware([
+    'captureRequestBody' => true,
+    'captureResponseBody' => true,
+    'redactHeaders' => ['authorization', 'cookie', 'x-api-key'],
+    'redactRequestBody' => ['$..address', '$..streetAddress', '$..zipCode', '$..email'],
+    'redactResponseBody' => ['$..address', '$..streetAddress', '$..zipCode', '$..email'],
+]));
+
 // Register middleware
 $app->addRoutingMiddleware();
 
@@ -49,27 +71,6 @@ $routes($app);
 
 // Add Body Parsing Middleware
 $app->addBodyParsingMiddleware();
-
-// Monoscope: capture request/response payloads on the span.
-//
-// Added AFTER addBodyParsingMiddleware because Slim runs middleware outermost-last: this
-// executes around the body parser, so the parsed body is available by the time the span is
-// built. Registered before the error middleware for the same reason — a request that ends
-// in a 500 is exactly the one whose payload is worth having.
-//
-// It composes with the OTel setup already in this service: the middleware takes the ambient
-// tracer from Globals::tracerProvider() and adds no exporter of its own.
-//
-// Redaction is by JSONPath and runs before the body reaches the span. The quote service
-// only receives shipping dimensions and an address, but the address is still a real one, so
-// it is redacted rather than shipped.
-$app->add(new \APIToolkit\APIToolkitMiddleware([
-    'captureRequestBody' => true,
-    'captureResponseBody' => true,
-    'redactHeaders' => ['authorization', 'cookie', 'x-api-key'],
-    'redactRequestBody' => ['$..address', '$..streetAddress', '$..zipCode', '$..email'],
-    'redactResponseBody' => ['$..address', '$..streetAddress', '$..zipCode', '$..email'],
-]));
 
 // Add Error Middleware
 $errorMiddleware = $app->addErrorMiddleware(true, true, true);
