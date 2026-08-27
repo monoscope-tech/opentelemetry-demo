@@ -74,8 +74,26 @@ $app->addBodyParsingMiddleware();
 
 // Add Error Middleware
 $errorMiddleware = $app->addErrorMiddleware(true, true, true);
+// Drain before exiting, rather than exiting the instant SIGTERM lands.
+//
+// Kubernetes removes a terminating pod from the Service endpoints asynchronously, and that
+// removal races the container exiting. Whichever loses, the loser is this process: kube-proxy
+// keeps DNAT-ing new connections here for a moment after SIGTERM, and if nothing is bound the
+// packets are dropped rather than refused. The caller does not see a connection error it can
+// retry — it sees nothing at all, and gives up at its own deadline.
+//
+// That is what shipping's 5s timeouts against /getquote were: every one landed within ~30s of
+// a quote rollout, including a rollout that was reverting *to* the uninstrumented image, and
+// none landed while the service was simply serving traffic. Startup is not the gap — this
+// container answers in 0.19s — the teardown is.
+//
+// So keep the loop running, and keep serving, for long enough that endpoint removal has
+// certainly propagated, then exit. terminationGracePeriodSeconds is 30, so this stays well
+// inside the budget kubernetes allows before it sends SIGKILL.
 Loop::get()->addSignal(SIGTERM, function() {
-    exit;
+    Loop::addTimer(15, function() {
+        exit;
+    });
 });
 
 /* workaround for non-async batch processors */
