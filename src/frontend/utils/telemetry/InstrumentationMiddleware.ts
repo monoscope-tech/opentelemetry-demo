@@ -1,83 +1,51 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-import { NextApiHandler, NextApiResponse } from 'next';
-import {context, Exception, Span, SpanStatusCode, trace} from '@opentelemetry/api';
-import { SemanticAttributes } from '@opentelemetry/semantic-conventions';
-import { serializeBody } from './PayloadCapture';
-
-const InstrumentationMiddleware = (handler: NextApiHandler): NextApiHandler => {
-  return async (request, response) => {
-    const span = trace.getSpan(context.active()) as Span;
-
-    // Request body first: a handler that throws still leaves the payload that
-    // caused it on the span, which is the whole point of capturing it.
-    const requestBody = serializeBody(request.body);
-    if (requestBody !== undefined) {
-      span.setAttribute('http.request.body', requestBody);
-      span.setAttribute('http.request.body.size', requestBody.length);
-    }
-
-    const restore = captureResponseBody(response, span);
-
-    let httpStatus = 200;
-    try {
-      await runWithSpan(span, async () => handler(request, response));
-      httpStatus = response.statusCode;
-    } catch (error) {
-      span.recordException(error as Exception);
-      span.setStatus({ code: SpanStatusCode.ERROR });
-      httpStatus = 500;
-      throw error;
-    } finally {
-      span.setAttribute(SemanticAttributes.HTTP_STATUS_CODE, httpStatus);
-      restore();
-    }
-  };
-};
+import { NextApiHandler } from 'next';
+import { withMonoscopePagesRouter } from '@monoscopetech/next';
 
 /**
- * Next gives no hook for "the handler is about to send this", so the two
- * methods the demo's API routes actually use are wrapped for the duration of
- * the request and put back afterwards.
+ * Wraps every /api route so Monoscope sees the request and response payloads.
  *
- * Every step is defensive: capture must never be the reason a response fails
- * to send. If serialization throws, the original method still runs.
+ * This is the SDK's own wrapper rather than a hand-rolled span hook, and the difference is
+ * not stylistic. Monoscope only lifts bodies out of a span and into the Req/Resp Body tabs
+ * when the span is one of its own — `monoscope.http` — and when the body attributes are
+ * base64. A hook that sets `http.request.body` to raw JSON on the ambient span produces
+ * attributes that are searchable but tabs that stay empty, which reads as the feature being
+ * broken rather than as instrumentation that does not match the contract.
+ *
+ * The SDK composes with the OTel setup already in Instrumentation.js: it takes no exporter
+ * configuration and writes to the ambient tracer, so the demo's collector routing is
+ * untouched.
  */
-function captureResponseBody(response: NextApiResponse, span: Span): () => void {
-  const originalJson = response.json.bind(response);
-  const originalSend = response.send.bind(response);
 
-  const record = (body: unknown) => {
-    try {
-      const serialized = serializeBody(body);
-      if (serialized !== undefined) {
-        span.setAttribute('http.response.body', serialized);
-        span.setAttribute('http.response.body.size', serialized.length);
-      }
-    } catch {
-      // ignore — telemetry never blocks a response
-    }
-  };
+// Recursive descent (`$..`) rather than fixed paths: the same field sits at different depths
+// in a checkout request and in the order echoed back on the response, and a path that misses
+// is indistinguishable from a field that was not there.
+const SENSITIVE_PATHS = [
+  '$..creditCard',
+  '$..creditCardNumber',
+  '$..creditCardCvv',
+  '$..creditCardExpirationYear',
+  '$..creditCardExpirationMonth',
+  '$..email',
+  '$..streetAddress',
+  '$..zipCode',
+];
 
-  response.json = (body: unknown) => {
-    record(body);
-    return originalJson(body);
-  };
-  response.send = (body: unknown) => {
-    record(body);
-    return originalSend(body);
-  };
-
-  return () => {
-    response.json = originalJson;
-    response.send = originalSend;
-  };
-}
-
-async function runWithSpan(parentSpan: Span, fn: () => Promise<unknown>) {
-  const ctx = trace.setSpan(context.active(), parentSpan);
-  return await context.with(ctx, fn);
-}
+const InstrumentationMiddleware = (handler: NextApiHandler): NextApiHandler =>
+  withMonoscopePagesRouter(handler, {
+    serviceName: process.env.OTEL_SERVICE_NAME || 'frontend',
+    captureRequestBody: true,
+    captureResponseBody: true,
+    redactHeaders: ['authorization', 'cookie', 'set-cookie', 'x-api-key'],
+    // Both lists carry the same paths on purpose. @monoscopetech/next 1.1.1 redacts the
+    // response body with `redactRequestBody` — `redactResponseBody` is accepted and then
+    // ignored — so listing these only under the response key would ship the checkout
+    // response's address and card fields in the clear. Fixed upstream on
+    // monoscope-js#fix/redact-response-body; the duplicate can go once that ships.
+    redactRequestBody: SENSITIVE_PATHS,
+    redactResponseBody: SENSITIVE_PATHS,
+  }) as NextApiHandler;
 
 export default InstrumentationMiddleware;
