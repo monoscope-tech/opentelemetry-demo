@@ -6,10 +6,22 @@
 #
 # Apply:
 #   helm upgrade otel-demo open-telemetry/opentelemetry-demo \
-#     --reset-values --values monoscope-k8s/otel-demo-overlay.yaml
+#     --version 0.41.0 --reset-values --values monoscope-k8s/otel-demo-overlay.yaml
 #
 # (--reset-values clears any previous user-supplied values so the bundled
 # collector returns to chart defaults plus only what's added here.)
+#
+# PIN THE CHART VERSION. This file re-lists chart-default exporter names
+# verbatim (see the pipelines block below), and 0.41.0 renamed every one of
+# them — otlp/jaeger -> otlp_grpc/jaeger, spanmetrics -> span_metrics,
+# otlphttp/prometheus -> otlp_http/prometheus. Applying an overlay written for
+# one chart version against another produces a collector config referencing
+# exporters that do not exist, the collector refuses to start, and ALL demo
+# telemetry stops. Re-sync this file against
+# `helm show values open-telemetry/opentelemetry-demo --version <v>`
+# whenever the pinned version changes.
+#
+# Currently written for: chart 0.41.0 (app version 3.0.0).
 
 # Prometheus: the chart caps server memory at 400Mi, but with 7d retention +
 # exemplar-storage (exemplars stream in from the spanmetrics connector) the TSDB
@@ -27,6 +39,20 @@ prometheus:
         memory: 512Mi
       limits:
         memory: 1536Mi
+
+# The 3.0.0 line adds three LLM-backed services. `agent` requires an
+# OPENAI_API_KEY, `chatbot` is a Gradio front end for it, and `mcp` serves it
+# tools — none of which we hold credentials for, so all three would crash-loop
+# and emit nothing but startup failures. That is not "realistic demo errors",
+# it is three broken pods burning memory on nodes already sitting at 56-64%.
+# Re-enable them (and add the key) if the demo ever wants the GenAI story.
+components:
+  agent:
+    enabled: false
+  chatbot:
+    enabled: false
+  mcp:
+    enabled: false
 
 opentelemetry-collector:
   # Run the bundled collector as a singleton Deployment instead of the chart's
@@ -63,11 +89,19 @@ opentelemetry-collector:
         # The chart merges receivers/processors but replaces pipeline arrays,
         # so we re-list the chart-default exporters here verbatim. If the
         # chart updates its defaults, this list must be re-synced (check
-        # `helm show values open-telemetry/opentelemetry-demo`).
+        # `helm show values open-telemetry/opentelemetry-demo --version <v>`).
+        #
+        # Names below are the 0.41.0 spellings — see the version warning at the
+        # top of this file before changing the pinned chart version.
+        #
+        # The `profiles` pipeline that 0.41.0 adds is deliberately NOT listed:
+        # naming it here would replace its exporter array too, and it exports to
+        # firepit, which the chart disables by default. Leaving it unnamed keeps
+        # the chart default intact.
         traces:
-          exporters: [otlp/jaeger, debug, spanmetrics, otlp/monoscope-agent]
+          exporters: [otlp_grpc/jaeger, debug, span_metrics, otlp/monoscope-agent]
         metrics:
-          exporters: [otlphttp/prometheus, debug, otlp/monoscope-agent]
+          exporters: [otlp_http/prometheus, debug, otlp/monoscope-agent]
         # Logs ARE forwarded to monoscope-agent. These are the OTLP log records
         # emitted by the OTel logger SDKs, which carry trace_id/span_id from the
         # active span — so logs land trace-correlated in monoscope (clickable
@@ -75,7 +109,7 @@ opentelemetry-collector:
         # (it's plain console text), so forwarding OTLP is what enables
         # correlation. Double-counting is prevented at the OTHER end: the agent's
         # filelog excludes the pods of every service that emits OTLP logs (see
-        # values-agent.yaml). Uninstrumented services (frontend, llm, flagd,
+        # values-agent.yaml). Uninstrumented services (frontend, flagd,
         # image-provider, databases, …) emit no OTLP logs, so they keep flowing
         # via filelog only — no duplication.
         logs:

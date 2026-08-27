@@ -1,0 +1,39 @@
+USER-SUPPLIED VALUES:
+opentelemetry-collector:
+  config:
+    exporters:
+      otlp/monoscope-agent:
+        endpoint: monoscope-agent-opentelemetry-collector.default.svc.cluster.local:4317
+        tls:
+          insecure: true
+    service:
+      pipelines:
+        logs:
+          exporters:
+          - opensearch
+          - debug
+          - otlp/monoscope-agent
+        metrics:
+          exporters:
+          - otlphttp/prometheus
+          - debug
+          - otlp/monoscope-agent
+        traces:
+          exporters:
+          - otlp/jaeger
+          - debug
+          - spanmetrics
+          - otlp/monoscope-agent
+  mode: deployment
+  resources:
+    limits:
+      memory: 1Gi
+    requests:
+      memory: 256Mi
+prometheus:
+  server:
+    resources:
+      limits:
+        memory: 1536Mi
+      requests:
+        memory: 512Mi
