@@ -55,6 +55,8 @@ server.addService(health.service, new health.Implementation({
 server.addService(otelDemoPackage.oteldemo.PaymentService.service, {
   charge: observeGrpc({
     method: '/oteldemo.PaymentService/Charge',
+    captureRequestBody: true,
+    captureResponseBody: true,
     redactRequestBody: [
       '$..creditCardNumber',
       '$..creditCardCvv',
