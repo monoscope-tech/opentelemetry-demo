@@ -408,10 +408,22 @@ async function addProductToCartBrowser(page) {
 // the one that produces an end-to-end trace across frontend, cart, checkout,
 // payment, shipping and email.
 async function checkoutJourney(page) {
-    await Promise.all([
-        page.waitForResponse(/\/images\/products\//, { timeout: 25000 }),
-        page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded' }),
-    ])
+    // Same hydration gate as addProductToCartBrowser: the homepage is not
+    // interactive until a product thumbnail resolves, so a click fired before
+    // that never reaches the Next.js router.
+    //
+    // But it is registered as a soft gate rather than awaited in a
+    // Promise.all. Any product image satisfies it, and a browser-level cache
+    // hit or a slow flag means no matching response event ever fires — in
+    // which case Promise.all rejects and the whole journey is abandoned after
+    // 25s of nothing. That produced 10-second recordings where a full funnel
+    // should have been. waitForSelector below is the real precondition; this
+    // just gives hydration a chance to happen first.
+    const hydrated = page
+        .waitForResponse(/\/images\/products\//, { timeout: 20000 })
+        .catch(() => {})
+    await page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded' })
+    await hydrated
     await readPage(page, 2)
     await browseProducts(page, 4)
 
