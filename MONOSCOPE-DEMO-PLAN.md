@@ -22,7 +22,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[!]` blocked / needs a
 | 5 | Monoscope instrumentation per service (payload capture) | `[x]` frontend API surface; `[ ]` backends |
 | 6 | Browser SDK: sessions, user/tenant, replay | `[x]` verified end to end |
 | 7 | Load generator drives real browser sessions | `[x]` verified end to end |
-| 8 | Metric exemplars reaching the demo project | `[x]` generated; `[ ]` dangling-link fix |
+| 8 | Metric exemplars reaching the demo project | `[x]` generated and resolving 8/8 |
 | 9 | Repo linking → source in stack traces | `[x]` verified |
 | 10 | Monoscope-as-code config sync from this repo | `[x]` verified both directions |
 
@@ -740,20 +740,20 @@ Rollback to the pre-upgrade state: `helm rollback otel-demo 18`.
 
 ## 12. Open items, in priority order
 
-1. **Exemplar dangling links (§8).** Filter `otelcol-contrib` and `jaeger` self-telemetry
-   out of the metrics forwarded to monoscope, so the exemplar list is all-app and its
-   links resolve. Config-only, needs a careful overlay edit.
-2. **Payload capture on the backend services (§5).** Reuse `PayloadCapture.ts`'s redaction
+1. **Payload capture on the backend services (§5).** Reuse `PayloadCapture.ts`'s redaction
    rules; `checkout` and `cart` first.
 3. **Stamp the git sha** into `service.version` at build time so code mappings follow the
    deployed commit instead of a pinned tag (§9).
-4. **Replay session length.** Recordings are ~11s and cover a complete funnel, but the
+3. **Replay session length.** Recordings are ~11s and cover a complete funnel, but the
    duration looks short for the journey that produced it. Worth checking against the
    known open monoscope bug where a session is marked merged after its first pass and the
    rest is stranded.
-5. **Watch event volume and billing.** Baseline before this work was 87.9k events/hr on a
-   project with a live Stripe subscription. Payload capture adds bytes per span, not
-   spans, but it is worth a look.
+4. **Event volume roughly tripled — decide if that is acceptable.** 87.9k events/hr before
+   this work, **~264k/hr after**, on a project with a live Stripe subscription. No single
+   runaway service; it is the 3.0.0 upgrade's extra services, browser RUM (~23k/hr), and
+   the kafka logs that were previously being dropped entirely (~5k/hr). Levers, cheapest
+   first: `LOAD_GENERATOR_VUS` (chart default 5), the browser scenario's VU count, and
+   `MONOSCOPE_REPLAY_SAMPLE_RATE` (currently 1 = record everything).
 
 ## 13. Monoscope product defects found while doing this
 
