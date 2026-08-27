@@ -397,42 +397,15 @@ rides the same rails afterwards.
 
 ## 5. Payload capture — DONE for the frontend API surface; backends are the long tail
 
-**Shipped and verified: every `/api/*` route on the frontend now carries
-`http.request.body` and `http.response.body`.** One hook in
-`utils/telemetry/InstrumentationMiddleware.ts` (which already wrapped every handler and
-had request and response in scope) covers the whole storefront API — cart, checkout,
-products, recommendations, currency, shipping, data.
+**Shipped: every `/api/*` route on the frontend is wrapped by the Monoscope Next SDK**, so
+spans carry the payload contract the server actually decodes. Verified live: **342 spans
+with `body.request_body` and `body.response_body` populated** — that `body` column is what
+the Req/Resp Body tabs read, and it is what the earlier hand-rolled hook never produced.
 
-Live on the demo project: 628 spans with a request body and 1066 with a response body in
-a 10-minute window.
-
-### Redaction — the part that had to be right before this shipped
-
-The collector's `transform/redact_sensitive_data` processor redacts by attribute **key**.
-A serialized body is one opaque string those rules cannot see, so capturing
-`/api/checkout` without redacting first would have shipped **real card numbers, CVVs and
-postal addresses in clear text** to the backend.
-
-`utils/telemetry/PayloadCapture.ts` redacts before the value ever reaches a span:
-sensitive keys (card, cvv, password, token, secret, cookie, ssn, …) are dropped outright;
-identifying ones (email, street address, zip) are coarsened to keep them distinguishable
-without being recoverable.
-
-Verified against a real captured checkout body, live:
-
-```json
-{"address":{"city":"Seattle","country":"United States","state":"WA",
-            "streetAddress":"4***","zipCode":"9***"},
- "creditCard":"[redacted]","email":"j***@example.com",
- "userCurrency":"USD","userId":"b98485ba-6772-4a3b-9274-14a9528483cb"}
-```
-
-The shape a debugger needs survives; nothing identifying does.
-
-Bounded and defensive throughout: a depth cap so a cyclic body cannot hang a request, an
-8 KB cap that truncates rather than drops (knowing a 2 MB body arrived beats knowing
-nothing), and a response that still sends if serialization throws. Behaviour checks were
-run against the real checkout payload plus cyclic, oversized, non-JSON and empty inputs.
+Response bodies contain real payloads (76 distinct variants: product catalog, cart
+contents). **Request bodies currently arrive as `{}`** — see the SDK defects below; the
+published SDK does not capture them on a Pages Router app. Nothing sensitive is exposed by
+this (the bodies are empty), but request payloads are not yet part of the demo.
 
 ### The frontend now uses the native SDK
 
