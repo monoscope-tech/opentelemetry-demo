@@ -1,0 +1,157 @@
+constants: null
+description: Apache throughput, worker saturation, scoreboard, and CPU (OpenTelemetry
+  apache receiver, mod_status)
+discovery_metrics:
+- apache.
+file: apache.yaml
+icon: apache
+preview: /public/assets/svgs/screens/http-stats.svg
+refresh_interval: 60s
+tabs: null
+tags:
+- infrastructure
+teams: []
+time_range: null
+title: E2E Grid Fixture
+variables: null
+widgets:
+- layout:
+    h: 4
+    w: 6
+    x: 6
+    'y': 15
+  query: metrics | where metric_name == "apache.connections.async" | summarize avg(value)
+    by bin_auto(timestamp), attributes.connection_state
+  title: Async Connections
+  type: timeseries_line
+  unit: connections
+- layout:
+    h: 4
+    w: 6
+    x: 6
+    'y': 11
+  query: metrics | where metric_name == "apache.cpu.load" | summarize avg(value) by
+    bin_auto(timestamp)
+  title: CPU Load
+  type: timeseries_line
+  unit: '%'
+- description: Increase in total request-serving time per interval; spikes without
+    matching request-rate spikes mean slow requests.
+  layout:
+    h: 4
+    w: 6
+    x: 0
+    'y': 11
+  query: metrics | where metric_name == "apache.request.time" | summarize range(value)
+    by bin_auto(timestamp)
+  title: Cumulative Request Time
+  type: timeseries
+  unit: ms
+- layout:
+    h: 4
+    w: 6
+    x: 0
+    'y': 15
+  query: metrics | where metric_name in ("apache.load.1", "apache.load.5", "apache.load.15")
+    | summarize avg(value) by bin_auto(timestamp), metric_name
+  title: Load Averages
+  type: timeseries_line
+  unit: '%'
+- children:
+  - eager: true
+    icon: activity
+    layout:
+      h: 2
+      w: 3
+      x: 6
+      'y': 0
+    query: metrics | where metric_name == "apache.workers" and attributes.state ==
+      "busy" | summarize avg(value)
+    title: Busy Workers
+    type: stat
+    unit: workers
+  - eager: true
+    icon: swap
+    layout:
+      h: 2
+      w: 3
+      x: 3
+      'y': 0
+    query: metrics | where metric_name == "apache.current_connections" | summarize
+      avg(value)
+    title: Current Connections
+    type: stat
+    unit: connections
+  - eager: true
+    icon: list-tree
+    layout:
+      h: 2
+      w: 3
+      x: 0
+      'y': 0
+    query: metrics | where metric_name == "apache.requests" | summarize range(value)
+      by bin_auto(timestamp)
+    title: Requests
+    type: timeseries_stat
+    unit: reqs
+  - eager: true
+    icon: clock
+    layout:
+      h: 2
+      w: 3
+      x: 9
+      'y': 0
+    query: metrics | where metric_name == "apache.uptime" | summarize max(value) /
+      86400
+    title: Uptime
+    type: stat
+    unit: days
+  layout:
+    h: 3
+    w: 12
+    x: 0
+    'y': 0
+  title: Overview
+  type: group
+- layout:
+    h: 4
+    w: 6
+    x: 0
+    'y': 3
+  query: metrics | where metric_name == "apache.requests" | summarize range(value)
+    by bin_auto(timestamp)
+  title: Request Rate
+  type: timeseries
+  unit: reqs
+- layout:
+    h: 4
+    w: 6
+    x: 0
+    'y': 7
+  query: metrics | where metric_name == "apache.scoreboard" | summarize avg(value)
+    by bin_auto(timestamp), attributes.state
+  title: Scoreboard
+  type: timeseries_line
+  unit: workers
+- layout:
+    h: 4
+    w: 6
+    x: 6
+    'y': 7
+  query: metrics | where metric_name == "apache.traffic" | summarize range(value)
+    / 1048576 by bin_auto(timestamp)
+  title: Traffic
+  type: timeseries
+  unit: MB
+- description: All workers busy means requests queue — raise MaxRequestWorkers or
+    find the slow handler.
+  layout:
+    h: 4
+    w: 6
+    x: 6
+    'y': 3
+  query: metrics | where metric_name == "apache.workers" | summarize avg(value) by
+    bin_auto(timestamp), attributes.state
+  title: Workers (busy vs idle)
+  type: timeseries_line
+  unit: workers
