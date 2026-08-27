@@ -19,9 +19,9 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[!]` blocked / needs a
 | 2 | Fork synced with upstream (252 commits) + pushed | `[x]` |
 | 3 | This plan document | `[x]` |
 | 4 | Source → cluster build/deploy pipeline | `[x]` chart upgraded + build workflow |
-| 5 | Monoscope instrumentation per service (payload capture) | `[ ]` |
-| 6 | Browser SDK: sessions, user/tenant, replay | `[ ]` |
-| 7 | Load generator drives real browser sessions | `[ ]` |
+| 5 | Monoscope instrumentation per service (payload capture) | `[x]` frontend API surface; `[ ]` backends |
+| 6 | Browser SDK: sessions, user/tenant, replay | `[x]` verified end to end |
+| 7 | Load generator drives real browser sessions | `[x]` verified end to end |
 | 8 | Metric exemplars reaching the demo project | `[x]` generated; `[ ]` dangling-link fix |
 | 9 | Repo linking → source in stack traces | `[x]` verified |
 | 10 | Monoscope-as-code config sync from this repo | `[x]` verified both directions |
@@ -395,13 +395,50 @@ rides the same rails afterwards.
 
 ---
 
-## 5. Payload capture per service
+## 5. Payload capture — DONE for the frontend API surface; backends are the long tail
 
-Full inventory is in `scratchpad/otel-demo-reference.md`. Summary of what we're up against:
+**Shipped and verified: every `/api/*` route on the frontend now carries
+`http.request.body` and `http.response.body`.** One hook in
+`utils/telemetry/InstrumentationMiddleware.ts` (which already wrapped every handler and
+had request and response in scope) covers the whole storefront API — cart, checkout,
+products, recommendations, currency, shipping, data.
 
-**No service captures request or response bodies today.** The `demo.*` attributes are
-business scalars, not payloads, so this is genuinely additive everywhere. The insertion
-point differs by how each service is wired:
+Live on the demo project: 628 spans with a request body and 1066 with a response body in
+a 10-minute window.
+
+### Redaction — the part that had to be right before this shipped
+
+The collector's `transform/redact_sensitive_data` processor redacts by attribute **key**.
+A serialized body is one opaque string those rules cannot see, so capturing
+`/api/checkout` without redacting first would have shipped **real card numbers, CVVs and
+postal addresses in clear text** to the backend.
+
+`utils/telemetry/PayloadCapture.ts` redacts before the value ever reaches a span:
+sensitive keys (card, cvv, password, token, secret, cookie, ssn, …) are dropped outright;
+identifying ones (email, street address, zip) are coarsened to keep them distinguishable
+without being recoverable.
+
+Verified against a real captured checkout body, live:
+
+```json
+{"address":{"city":"Seattle","country":"United States","state":"WA",
+            "streetAddress":"4***","zipCode":"9***"},
+ "creditCard":"[redacted]","email":"j***@example.com",
+ "userCurrency":"USD","userId":"b98485ba-6772-4a3b-9274-14a9528483cb"}
+```
+
+The shape a debugger needs survives; nothing identifying does.
+
+Bounded and defensive throughout: a depth cap so a cyclic body cannot hang a request, an
+8 KB cap that truncates rather than drops (knowing a 2 MB body arrived beats knowing
+nothing), and a response that still sends if serialization throws. Behaviour checks were
+run against the real checkout payload plus cyclic, oversized, non-JSON and empty inputs.
+
+### Remaining: the backend services
+
+Some services already emit body attributes through their own instrumentation —
+`shipping`, `quote`, `image-provider` and `flagd` show up with `http.request.body`
+already. The rest need a per-service hook, and the insertion point differs by wiring:
 
 | Wiring | Services | Where the hook goes |
 |---|---|---|
@@ -415,13 +452,13 @@ point differs by how each service is wired:
 | Next.js API routes | frontend | `utils/telemetry/InstrumentationMiddleware.ts` — already wraps every handler and has req+res in scope |
 | nginx / Envoy | image-provider, telemetry-docs, frontend-proxy | module/filter config |
 
-> **PII warning — read before enabling body capture on checkout.** The compose collector's
-> `transform/redact_sensitive_data` redacts **by attribute key** (`demo.payment.card_cvv`,
-> `demo.payment.card_number`, hashes `user.email`). A serialized request body is a single
-> opaque blob those rules cannot see, so turning on payload capture over `/api/checkout`
-> ships **card numbers, CVVs and addresses** to monoscope in the clear. Either add
-> body-level redaction alongside, or exclude the checkout payment path. This is a blocker
-> for that specific route, not for the feature.
+**Reuse `PayloadCapture.ts`'s rules when doing these** — every one of them will carry the
+same checkout PII through, and each language needs the same key-based redaction before
+the body reaches a span. Do not enable capture on a service without it.
+
+Order by demo value: `checkout` and `cart` (the funnel), then `product-catalog` and
+`recommendation`, then the rest. Each needs an image build and an `imageOverride` entry,
+so the cost is per-service — which is why the frontend went first: one hook, whole API.
 
 ## 6. Browser SDK — sessions, user/tenant, replay
 
@@ -647,3 +684,96 @@ is worthwhile but is content work, not a test of the feature, and the feature is
 4. Landing-page browser SDK docs are stale vs 0.11.6, and document
    `enableUserInteraction`'s default inverted.
 5. The demo-project API auth bypass permits anonymous writes.
+
+---
+
+## 11. Deployed state, and how to change it
+
+Cluster runs helm release `otel-demo` at chart **0.41.0** (app 3.0.0), revision 23.
+
+| component | image |
+|---|---|
+| frontend | `ghcr.io/monoscope-tech/demo:deb441b-frontend` (fork: RUM + payload capture) |
+| load-generator | `ghcr.io/monoscope-tech/demo:0d0f95d-load-generator` (fork: browser journeys) |
+| everything else | `ghcr.io/open-telemetry/demo:3.0.0-*` (upstream) |
+
+To ship a change to either fork-built service:
+
+```sh
+# 1. build (amd64, manual dispatch, tag defaults to the short sha)
+gh workflow run monoscope-build-images.yml \
+  -R monoscope-tech/opentelemetry-demo --ref main -f services=frontend
+
+# 2. point the values file at the new tag
+#    monoscope-k8s/otel-demo-images.yaml  (gitignored)
+
+# 3. apply BOTH values files together
+helm upgrade otel-demo open-telemetry/opentelemetry-demo \
+  --version 0.41.0 --reset-values \
+  -f monoscope-k8s/otel-demo-overlay.yaml \
+  -f monoscope-k8s/otel-demo-images.yaml
+```
+
+Rollback to the pre-upgrade state: `helm rollback otel-demo 18`.
+
+### Two traps that cost real time here
+
+1. **`useDefault.env: true` does not merge the chart's component env.** Supplying `env`
+   for a component *replaces* that component's list outright. The first render dropped all
+   eight backend gRPC addresses from the frontend; had it been applied, the frontend would
+   have reached nothing and it would have looked like a bad build. Every chart default is
+   now repeated verbatim in `otel-demo-images.yaml`, with a comment saying why. **Always
+   `helm template` and count the env vars before applying.**
+
+2. **Never regenerate the frontend lockfile on macOS.** `npm install` on arm64 silently
+   dropped the top-level `@emnapi/core` / `@emnapi/runtime` entries, which are only
+   reachable on linux. Nothing local noticed; the image build failed with
+   `Missing: @emnapi/runtime@1.11.3 from lock file`. Regenerate inside the node image the
+   Dockerfile uses:
+
+   ```sh
+   docker run --rm -v "$PWD/src/frontend":/app -w /app node:25.9.0-slim \
+     npm install --package-lock-only
+   ```
+
+---
+
+## 12. Open items, in priority order
+
+1. **Exemplar dangling links (§8).** Filter `otelcol-contrib` and `jaeger` self-telemetry
+   out of the metrics forwarded to monoscope, so the exemplar list is all-app and its
+   links resolve. Config-only, needs a careful overlay edit.
+2. **Payload capture on the backend services (§5).** Reuse `PayloadCapture.ts`'s redaction
+   rules; `checkout` and `cart` first.
+3. **Stamp the git sha** into `service.version` at build time so code mappings follow the
+   deployed commit instead of a pinned tag (§9).
+4. **Replay session length.** Recordings are ~11s and cover a complete funnel, but the
+   duration looks short for the journey that produced it. Worth checking against the
+   known open monoscope bug where a session is marked merged after its first pass and the
+   rest is stranded.
+5. **Watch event volume and billing.** Baseline before this work was 87.9k events/hr on a
+   project with a live Stripe subscription. Payload capture adds bytes per span, not
+   spans, but it is worth a look.
+
+## 13. Monoscope product defects found while doing this
+
+Each is a real bug in the product, found by using it rather than by reading it:
+
+1. **`@monoscopetech/browser@0.11.6` cannot be imported by Node at all.** Published with
+   `"type": "module"` but `dist/index.js` uses extensionless relative imports, which is
+   invalid ESM. Any SSR framework fails at build time, not just at runtime.
+2. **The published SDK has no tenant support** — no `tenant` config option, no
+   `setTenant()` — though both exist in the monoscope-web source. The npm release is
+   behind.
+3. **A project can only ever read source from its alphabetically-first git credential.**
+   `codeContextCredential` takes the head of a list ordered by account name. A stray
+   credential for an unrelated org silently masked ours, and the UI gave no indication the
+   account shown was one pick from several.
+4. **The git-sync settings page claims syncing "happens on a schedule or can be triggered
+   manually".** Neither exists — a push webhook is the only pull trigger.
+5. **Replay payload contract drift.** The SDK sends nested `user`/`tenant` objects; the
+   server expects flat `userId`/`userEmail`/`userName`, so replay user metadata is
+   permanently null and the player shows no user label.
+6. **A dashboard with an empty title round-trips to a file literally named `.yaml`.**
+7. **The demo project's API auth bypass permits anonymous writes**, not just reads — an
+   `X-Project-Id` header skips the `Authorization` check for the whole `/api/v1` surface.
