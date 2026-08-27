@@ -1,28 +1,36 @@
 # Example of the generated, gitignored `otel-demo-images.yaml`.
 #
-# Copy to `otel-demo-images.yaml` and fill in, or run:
-#   make monoscope-images-values TAG=<git-sha> MONOSCOPE_API_KEY=<rum-key>
+# Copy to `otel-demo-images.yaml` and fill in by hand.
 #
-# This is the only place the fork's own images and the browser RUM key are
-# configured. Apply it alongside otel-demo-overlay.yaml — helm merges multiple
-# -f values files, and --reset-values only clears values from *previous*
-# releases, not ones passed in the same command.
+# This is the only place the fork's own images, the browser RUM key, and the
+# commit each fork image was built from are configured. Apply it alongside
+# otel-demo-overlay.yaml — helm merges multiple -f values files, and
+# --reset-values only clears values from *previous* releases, not ones passed
+# in the same command.
+#
+# Use `envOverrides`, never `env`:
+#
+#   env:          REPLACES the component's env list outright. `useDefault.env: true`
+#                 does NOT merge it back. Supplying it for the frontend once dropped
+#                 all eight backend gRPC addresses; the frontend could reach nothing,
+#                 and it looked like a bad image rather than a values mistake.
+#   envOverrides: upserts — same-named variables replace, new ones append
+#                 (templates/_helpers.tpl, "otel-demo.envOverriden"). It also gives
+#                 OTEL_RESOURCE_ATTRIBUTES_EXTRA special treatment: the chart appends
+#                 its value onto the composed OTEL_RESOURCE_ATTRIBUTES.
+#
+# Because it replaces rather than appends, an OTEL_RESOURCE_ATTRIBUTES_EXTRA set here
+# must restate whatever the chart already had for that component (`service.criticality`
+# on most of them) or it is silently dropped.
 
 components:
-  # Frontend built from this fork, so the Monoscope browser SDK is in the
-  # bundle. Every other service stays on the upstream image.
-  #
-  # `useDefault.env: true` keeps the chart's own frontend env and appends ours.
-  # Dropping it unsets every backend gRPC address and the frontend fails to
-  # reach any service — the failure looks like a broken build, not a config
-  # mistake, so leave it alone.
+  # Frontend built from this fork, so the Monoscope browser SDK is in the bundle.
+  # Every service not listed here stays on the upstream image.
   frontend:
     imageOverride:
       repository: ghcr.io/monoscope-tech/demo
       tag: REPLACE_WITH_GIT_SHA-frontend
-    useDefault:
-      env: true
-    env:
+    envOverrides:
       # Public by nature: this ships to every browser. It is a RUM key for the
       # public demo project, not a server credential.
       - name: MONOSCOPE_API_KEY
@@ -34,12 +42,32 @@ components:
       # 1 = record every session.
       - name: MONOSCOPE_REPLAY_SAMPLE_RATE
         value: "1"
+      - name: OTEL_RESOURCE_ATTRIBUTES_EXTRA
+        value: service.criticality=critical,vcs.repository.ref.revision=REPLACE_WITH_GIT_SHA
 
-  # Load generator built from this fork, for the richer browser journeys that
-  # make session replays worth watching.
+  # Load generator built from this fork, for the richer browser journeys that make
+  # session replays worth watching.
   load-generator:
     imageOverride:
       repository: ghcr.io/monoscope-tech/demo
       tag: REPLACE_WITH_GIT_SHA-load-generator
-    useDefault:
-      env: true
+    envOverrides:
+      - name: OTEL_RESOURCE_ATTRIBUTES_EXTRA
+        value: service.criticality=low,vcs.repository.ref.revision=REPLACE_WITH_GIT_SHA
+
+# vcs.repository.ref.revision is what makes code mappings resolve against the commit
+# that is actually deployed instead of the ref pinned on the mapping row. Monoscope's
+# `revisionFor` tries service.version, then this key, then git.commit.sha, and accepts
+# only a value shaped like a sha (hex, 7-40 chars) — service.version is the chart
+# appVersion, so it never qualifies.
+#
+# BARE SHA ONLY. The image tag `<sha>-frontend` has a dash, fails the sha gate, and
+# falls back to the mapping's ref with no error anywhere: indistinguishable from the
+# feature not working. Keep the two in sync — measured against the live demo, the
+# load-generator mapping's pinned ref 2.2.0 returned HTTP 404 for `script.js`, which
+# had not been written yet at that tag. Every load-generator stack frame had been
+# unresolvable until the sha was stamped.
+#
+# Only fork-built components get this. An upstream image was not built from any commit
+# of this fork, so pointing its stack traces at our sha resolves to source that is not
+# what is running.
