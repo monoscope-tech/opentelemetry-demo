@@ -35,7 +35,14 @@ const SENSITIVE = new Set([
   'zipCode',
 ])
 
+// protobuf-js decodes a 64-bit field into a Long — `{low, high, unsigned}` — which
+// JSON.stringify renders verbatim. An amount that reads {"low":42,"high":0,"unsigned":false}
+// instead of "42" looks like broken capture, so collapse it back to the number it stands for.
+const isLong = v =>
+  v && typeof v === 'object' && typeof v.low === 'number' && typeof v.high === 'number'
+
 const redact = value => {
+  if (isLong(value)) return String(value.high * 2 ** 32 + (value.low >>> 0))
   if (Array.isArray(value)) return value.map(redact)
   if (value && typeof value === 'object') {
     return Object.fromEntries(
@@ -45,8 +52,9 @@ const redact = value => {
   return value
 }
 
-// gRPC decodes 64-bit fields to strings and bytes to Buffers, neither of which JSON.stringify
-// renders usefully, so this is best-effort: capture must never be the reason a charge fails.
+// Best-effort by design: capture must never be the reason a charge fails, so anything
+// JSON.stringify cannot represent (a Buffer field, a cycle) degrades to no body rather than
+// to an exception on the request path.
 const encodeBody = value => {
   try {
     return Buffer.from(JSON.stringify(redact(value) ?? null)).toString('base64')

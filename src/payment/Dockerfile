@@ -21,9 +21,12 @@ COPY --from=builder /usr/src/app/node_modules/ node_modules/
 
 COPY ./pb/demo.proto demo.proto
 
+# Every source file is copied by name, so a new module is invisible to the image until it is
+# listed here — and the failure is a crash loop at startup, not a build error.
 COPY ./src/payment/charge.js charge.js
 COPY ./src/payment/index.js index.js
 COPY ./src/payment/logger.js logger.js
+COPY ./src/payment/monoscope.js monoscope.js
 
 EXPOSE ${PAYMENT_PORT}
 
