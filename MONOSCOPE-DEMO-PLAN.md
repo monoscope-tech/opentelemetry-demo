@@ -22,7 +22,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[!]` blocked / needs a
 | 5 | Monoscope instrumentation per service (payload capture) | `[ ]` |
 | 6 | Browser SDK: sessions, user/tenant, replay | `[ ]` |
 | 7 | Load generator drives real browser sessions | `[ ]` |
-| 8 | Metric exemplars reaching the demo project | `[ ]` |
+| 8 | Metric exemplars reaching the demo project | `[x]` generated; `[ ]` dangling-link fix |
 | 9 | Repo linking → source in stack traces | `[ ]` |
 | 10 | Monoscope-as-code config sync from this repo | `[ ]` |
 
@@ -432,20 +432,59 @@ Do **not** add Playwright or Puppeteer. k6's browser module is the in-tree mecha
 it is Playwright-*like* but not Playwright (no `:has-text()`; selectors go straight to
 `querySelectorAll`). Cypress exists in the repo but is e2e-test-only.
 
-## 8. Exemplars
+## 8. Exemplars — VERIFIED WORKING, with one real defect
 
-Likely much closer than expected: **`src/cart/src/Program.cs` already calls
-`SetExemplarFilter(ExemplarFilterType.TraceBased)`** and exports metrics over OTLP. Per
-§3.4 that is exactly the required shape — application metric, recorded in a sampled span,
-OTLP-exported.
+**Exemplars are already flowing to the demo project.** No build or config change was
+needed to get them; `src/cart/src/Program.cs` already calls
+`SetExemplarFilter(ExemplarFilterType.TraceBased)` and the k8s path forwards OTLP metrics
+through to monoscope intact.
 
-- [ ] Verify cart's OTLP metrics actually reach monoscope with exemplars attached. The
-      k8s path forwards metrics from the bundled collector to the monoscope agent, so it
-      should already work — **check before building anything.**
-- [ ] If nothing shows: confirm sampling isn't dropping the parent spans, and confirm the
-      metrics pipeline isn't losing exemplars in a processor.
-- [ ] Do **not** try to get exemplars out of `spanmetrics` or Prometheus — §3.4, those
-      paths structurally cannot produce them.
+Confirmed live against `00000000-…`:
+
+```
+GET /p/00000000-…/metrics/details/<metric>/exemplars?since=1h
+  http.server.request.duration -> 100 exemplars (page cap)
+  http.client.request.duration -> 100
+  rpc.server.duration          ->  88
+  quotes                       ->   0   (plain counter, no exemplar filter)
+```
+
+Each carries a real `trace_id`, `span_id`, `value` and a deep link to the trace.
+
+### Defect: ~87% of exemplars link to a trace that isn't stored
+
+Sampled 8 most-recent exemplars from each of two metrics and resolved each trace id:
+**1/8 and 1/8**. Re-tested minutes later with an identical result, so this is **not**
+ingestion lag. A known-good app trace round-trips fine (`count=3`), so the query is sound.
+
+Cause — look at who actually emits these metrics:
+
+| metric | datapoints by service (30m) |
+|---|---|
+| `http.server.request.duration` | **otelcol-contrib 282**, **jaeger 179**, flagd 120, cart 120 |
+| `rpc.server.duration` | **otelcol-contrib 1704**, **jaeger 180**, product-catalog 120, checkout 60, ad 30 |
+
+The exemplar list is dominated by **collector and Jaeger self-telemetry**. Those services'
+metrics are forwarded to monoscope but their **traces are not**, so their exemplars point
+at trace ids that were never ingested. The ~19% of datapoints from real app services
+matches the ~12% resolution rate observed.
+
+So the feature works; the demo experience is polluted. Fix options:
+
+- **(preferred)** drop infra self-telemetry from the metrics forwarded to monoscope — add
+  a `filter` processor on the bundled collector's metrics pipeline excluding
+  `service.name` in `{otelcol-contrib, jaeger}`. Keeps volume (and billing, §3.7) down and
+  leaves the exemplar list all-app.
+- (alternative) also forward those services' traces so the links resolve — but that adds
+  event volume on a project with a live Stripe subscription.
+
+- [ ] Implement the filter in `otel-demo-overlay.yaml`. **Careful:** `make
+      k8s-apply-otel-demo-overlay` runs `--reset-values` and the chart *replaces* pipeline
+      arrays rather than merging, so the processor list must be re-listed in full.
+      Diff the live release values before applying — a botched apply takes the demo down.
+
+Do **not** try to get exemplars out of `spanmetrics` or Prometheus — §3.4, those paths
+structurally cannot produce them.
 
 ## 9. Repo linking
 
