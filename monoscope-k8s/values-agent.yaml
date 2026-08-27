@@ -118,6 +118,27 @@ config:
           value: ${env:MONOSCOPE_API_KEY}
           action: upsert
 
+    # Drop the collector's and Jaeger's own metrics on the way to monoscope.
+    #
+    # Their metrics dominate the demo project's exemplar list — otelcol-contrib
+    # alone was 1704 of the 2094 rpc.server.duration datapoints in a 30-minute
+    # window — but their *traces* are not forwarded, so every exemplar they
+    # carry points at a trace id monoscope never ingested. Measured resolution
+    # was 1 in 8: clicking a diamond on a chart led nowhere.
+    #
+    # Filtering here rather than in the demo collector's shared metrics
+    # pipeline is deliberate. That pipeline also feeds the demo's own
+    # Prometheus, and the chart ships a Grafana "OpenTelemetry Collector"
+    # dashboard that reads exactly these metrics — dropping them upstream
+    # would blank it. This agent's metrics pipeline feeds monoscope and nothing
+    # else, so the blast radius is only what we intend.
+    filter/infra_self_telemetry:
+      error_mode: ignore
+      metrics:
+        metric:
+          - 'resource.attributes["service.name"] == "otelcol-contrib"'
+          - 'resource.attributes["service.name"] == "jaeger"'
+
   exporters:
     otlp_grpc:
       endpoint: "otelcol.monoscope.tech:4317"
@@ -133,7 +154,7 @@ config:
         exporters: [otlp_grpc]
       metrics:
         receivers: [otlp, kubeletstats]
-        processors: [k8sattributes, memory_limiter, batch, resource]
+        processors: [k8sattributes, memory_limiter, filter/infra_self_telemetry, batch, resource]
         exporters: [otlp_grpc]
       logs:
         receivers: [otlp, filelog]
