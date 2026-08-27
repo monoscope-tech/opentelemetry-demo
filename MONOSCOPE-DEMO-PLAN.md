@@ -582,11 +582,12 @@ headless Chromium** (`grafana/k6:2.2.0-with-browser`), not Locust.
 
 What it lacks for a good replay:
 
-- [ ] `vus: 1` → raise it (mind the billing note in §3.7)
-- [ ] **No mouse movement at all** — only `page.click` / `page.selectOption`. Replays will
-      show jump-cuts, not a cursor. Use k6 v2's browser mouse/hover API for real pointer
-      motion, scrolling, and dwell time.
-- [ ] More routes — a full browse → product → add to cart → view cart → checkout journey.
+- [x] **Mouse movement** — `moveCursorTo` (eased, slightly arced) and `moveAndClick` replaced
+      the bare `page.click`, so replays show a cursor rather than jump-cuts.
+- [x] **A full journey** — `browseProducts` and `checkoutJourney` (60/20/20 weighted, 35%
+      abandon, 50% second lap) plus `readPage` dwell time. Replays run 18-24s.
+- [ ] `vus: 1` → raise it. Deliberately **not** done: it multiplies event volume on a
+      Stripe-metered project, which is the open decision in §12.
 
 Do **not** add Playwright or Puppeteer. k6's browser module is the in-tree mechanism, and
 it is Playwright-*like* but not Playwright (no `:has-text()`; selectors go straight to
@@ -638,10 +639,10 @@ So the feature works; the demo experience is polluted. Fix options:
 - (alternative) also forward those services' traces so the links resolve — but that adds
   event volume on a project with a live Stripe subscription.
 
-- [ ] Implement the filter in `otel-demo-overlay.yaml`. **Careful:** `make
-      k8s-apply-otel-demo-overlay` runs `--reset-values` and the chart *replaces* pipeline
-      arrays rather than merging, so the processor list must be re-listed in full.
-      Diff the live release values before applying — a botched apply takes the demo down.
+- [x] Implemented as `filter/infra_self_telemetry` in `values-agent.yaml` (the agent's
+      metrics pipeline feeds monoscope and nothing else, so the blast radius is only what we
+      intend — filtering in the demo collector's shared pipeline would have blanked the
+      chart's Grafana collector dashboard). **Exemplar resolution went 1-in-8 → 8-of-8.**
 
 Do **not** try to get exemplars out of `spanmetrics` or Prometheus — §3.4, those paths
 structurally cannot produce them.
@@ -827,45 +828,90 @@ Rollback to the pre-upgrade state: `helm rollback otel-demo 18`.
 
 ## 12. Open items, in priority order
 
-1. **Payload capture on the backend services (§5).** Reuse `PayloadCapture.ts`'s redaction
-   rules; `checkout` and `cart` first.
-2. **Stamp the git sha** into `service.version` at build time so code mappings follow the
-   deployed commit instead of a pinned tag (§9).
-3. **Git-sync pull is intermittent — the most important open item.** Roughly every other
-   push is silently not processed: the webhook returns 200 and is logged as accepted, but
-   `projects.git_sync.last_revision` does not advance and no dashboard changes apply. The
-   next push that *does* run sweeps up everything the missed ones left, so nothing is
-   lost — it just arrives late and unpredictably. Observed 5 pushes: 3 synced in under
-   20s, 2 never synced at all until a later push. Reproduce by pushing twice in a row and
-   watching `last_revision`.
-4. **Event volume roughly tripled — decide if that is acceptable.** 87.9k events/hr before
-   this work, **~264k/hr after**, on a project with a live Stripe subscription. No single
-   runaway service; it is the 3.0.0 upgrade's extra services, browser RUM (~23k/hr), and
-   the kafka logs that were previously being dropped entirely (~5k/hr). Levers, cheapest
-   first: `LOAD_GENERATOR_VUS` (chart default 5), the browser scenario's VU count, and
-   `MONOSCOPE_REPLAY_SAMPLE_RATE` (currently 1 = record everything).
+Rewritten 2026-08-27 after the second working session — items 1-3 of the original list are
+now done and item 4's figure was wrong.
+
+### Needs a human (credentials I do not hold)
+
+1. **`npm deprecate` the broken JS SDK versions.** `@monoscopetech/{common,express,fastify,next}`
+   at **1.2.0 and 1.3.0** cannot be imported from a production install: `@opentelemetry/api`
+   was declared dev-only. Fixed in 1.3.1, current is 1.3.2. Not `adonis` — it declared the
+   dependency properly and passed the gate. The token in `~/.npmrc` is expired (E401) and
+   publishing is OIDC trusted-publishing, which only mints a token inside `npm publish`, so
+   there is no CI route to `npm deprecate` either. Needs `npm login`.
+2. **Publish `monoscope-common` 1.2.0 to PyPI** (the gRPC interceptor). `.github/workflows/publish.yml`
+   now exists and uses PyPI Trusted Publishing, so no secret is stored — but it needs a
+   one-time publisher configured on PyPI for this repo/workflow/environment. **Note the wider
+   problem it exposed: all five Python packages sat at 1.1.0 locally while PyPI still serves
+   1.0.x, so the repo has been unreleased for some time.**
+
+### Product / cost decisions
+
+3. **Event volume.** 87.9k events/hr before this work, **~157-196k/hr now** on a project with
+   a live Stripe subscription. (The earlier "264k" figure in this document was wrong; TF's
+   `summarize count(*)` varies run to run, so treat any single reading as approximate and take
+   several.) No single runaway service — it is the 3.0.0 upgrade's extra services, browser RUM,
+   the kafka logs that were previously dropped entirely, and now gRPC payload capture on
+   `payment`. Levers, cheapest first: `LOAD_GENERATOR_VUS` (chart default 5), the browser
+   scenario's VU count, `MONOSCOPE_REPLAY_SAMPLE_RATE` (currently 1 = record everything), and
+   `capture_request_body` on payment.
+
+### gRPC across the remaining SDKs
+
+Full plan, per language, in `docs/grpc-sdk-support.md` in the monoscope repo. Shipped: **Node**
+(`observeGrpc`, published 1.3.2, deployed on `payment`), **Go** (v1.2.0), **Python** (merged,
+awaiting a PyPI release).
+
+4. **Java, .NET** — the two remaining languages where gRPC is common. Documented with the
+   contract and four cross-language lessons; not started.
+5. **`grpc.aio`** — the Python interceptor covers the sync server API only. The async API has a
+   separate `grpc.aio.ServerInterceptor` whose `intercept_service` is a coroutine.
+6. **Cross-cutting, still open:** streaming RPCs (currently left untouched in every language,
+   deliberately, since there is no single message to capture), a body size cap (no SDK has one
+   — a gRPC message can be megabytes and lands base64 on a span attribute), and docs (each
+   SDK's page needs a gRPC section, and the `instrument` skill's detection table routes every
+   framework to an HTTP middleware).
+
+### Demo polish
+
+7. **Backend payload capture beyond `payment` and `quote`.** Now unblocked for any Go or
+   Python service by the new interceptors — `checkout`, `product-catalog` and `shipping` are
+   Go; `recommendation` is Python. Weigh against item 3 first.
+8. **`vus: 1` in the browser scenario.** Raising it makes replays richer; it also multiplies
+   volume. Same decision as item 3.
+9. **Rollout gap is repo-wide, not quote-specific.** `quote` now drains on SIGTERM, but *no*
+   demo service has a readiness probe and none of the others drain, so any of them can
+   blackhole in-flight requests during a rollout. It only became visible on `quote` because
+   `shipping` calls it synchronously behind a 5s deadline. Fixing it for everything is
+   upstream-PR material.
 
 ## 13. Monoscope product defects found while doing this
 
 Each is a real bug in the product, found by using it rather than by reading it:
 
-1. **`@monoscopetech/browser@0.11.6` cannot be imported by Node at all.** Published with
+**FIXED since:** 1, 3 and 5 below. Left in place rather than deleted, because what they were
+and how they were found is the useful part.
+
+1. ~~**`@monoscopetech/browser@0.11.6` cannot be imported by Node at all.**~~ **Fixed in 0.12.0**, with
+   `scripts/verify-esm.mjs` in `build` so it cannot regress. Published with
    `"type": "module"` but `dist/index.js` uses extensionless relative imports, which is
    invalid ESM. Any SSR framework fails at build time, not just at runtime.
 2. **The published SDK has no tenant support** — no `tenant` config option, no
    `setTenant()` — though both exist in the monoscope-web source. The npm release is
    behind.
-3. **A project can only ever read source from its alphabetically-first git credential.**
+3. ~~**A project can only ever read source from its alphabetically-first git credential.**~~ **Fixed** —
+   prefers the credential matching the sync row's host+owner, falls back to newest.
    `codeContextCredential` takes the head of a list ordered by account name. A stray
    credential for an unrelated org silently masked ours, and the UI gave no indication the
    account shown was one pick from several.
 4. **The git-sync settings page claims syncing "happens on a schedule or can be triggered
    manually".** Neither exists — a push webhook is the only pull trigger.
-5. **Git-sync pull silently skips pushes** (see open item 3) — intermittent, ~40% miss
-   rate, webhook accepted with 200 each time.
+5. ~~**Git-sync pull silently skips pushes**~~ — **Fixed** (migration `0139_git_sync_announced_revision`).
+   The webhook records the announced head before enqueuing and the job distinguishes "nothing
+   changed" from "the host is behind". Went 3/5 → 5/5, each in 8s.
 6. **Replay payload contract drift.** The SDK sends nested `user`/`tenant` objects; the
    server expects flat `userId`/`userEmail`/`userName`, so replay user metadata is
    permanently null and the player shows no user label.
 7. **A dashboard with an empty title round-trips to a file literally named `.yaml`.**
-8. **The demo project's API auth bypass permits anonymous writes**, not just reads — an
+8. **Still open. The demo project's API auth bypass permits anonymous writes**, not just reads — an
    `X-Project-Id` header skips the `Authorization` check for the whole `/api/v1` surface.
