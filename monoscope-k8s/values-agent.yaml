@@ -60,13 +60,25 @@ config:
     # their stdout here would double-count and add a trace-less duplicate.
     #
     # The excluded set == every service observed emitting OTLP logs (the OTel
-    # logger SDK / javaagent is wired up). Everything NOT listed (frontend, llm,
-    # flagd, image-provider, postgres, valkey, kafka-ui, grafana, jaeger,
-    # prometheus, opensearch, …) emits no OTLP logs, so filelog stays its only
-    # log source — uninstrumented pod logs are preserved as before.
+    # logger SDK / javaagent is wired up). Everything NOT listed (frontend,
+    # flagd, image-provider, astronomy-db, valkey, grafana, jaeger, prometheus,
+    # opensearch, opamp-server, telemetry-docs, …) emits no OTLP logs, so
+    # filelog stays its only log source — uninstrumented pod logs are preserved.
     #
-    # Re-sync when adding/removing instrumented services: a service that starts
-    # shipping OTLP logs must be added here, or its logs double up.
+    # Re-sync when adding/removing instrumented services. This list is wrong in
+    # BOTH directions and both are silent:
+    #   - a service that starts shipping OTLP logs and is not excluded here has
+    #     its logs counted twice
+    #   - a service excluded here that does NOT ship OTLP logs has its logs
+    #     dropped entirely, with nothing to notice
+    #
+    # Verify against the data rather than by reading the deployment list:
+    #
+    #   monoscope chart 'kind == "log" and context.trace_id != ""
+    #                    | summarize count(*) by resource.service.name' --since 15m
+    #
+    # Every service that query returns belongs here; nothing else does. Last
+    # verified against the live demo project 2026-08-27, chart 0.41.0.
     filelog:
       exclude:
         # keep the agent's own self-exclusion (preset default)
@@ -80,11 +92,16 @@ config:
         - /var/log/pods/default_email-*_*/*/*.log
         - /var/log/pods/default_fraud-detection-*_*/*/*.log
         - /var/log/pods/default_frontend-proxy-*_*/*/*.log
-        - /var/log/pods/default_kafka-*_*/*/*.log
+        # kafka was excluded here but emits NO OTLP logs — the javaagent is
+        # attached for traces and metrics only. Excluding it meant its stdout
+        # was never scraped and its logs reached monoscope from nowhere at all:
+        # zero kafka log records, silently, for as long as this list has
+        # existed. Left off deliberately; re-add only if it starts emitting
+        # OTLP logs.
         - /var/log/pods/default_load-generator-*_*/*/*.log
         - /var/log/pods/default_payment-*_*/*/*.log
         - /var/log/pods/default_product-catalog-*_*/*/*.log
-        - /var/log/pods/default_product-reviews-*_*/*/*.log
+        # product-reviews was removed from the demo upstream in 3.0.0.
         - /var/log/pods/default_quote-*_*/*/*.log
         - /var/log/pods/default_recommendation-*_*/*/*.log
         - /var/log/pods/default_shipping-*_*/*/*.log
