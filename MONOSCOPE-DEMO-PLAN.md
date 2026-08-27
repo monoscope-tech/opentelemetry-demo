@@ -441,6 +441,11 @@ constraint, so the SDK now installs alongside the `php-di 7.1.1` this service pi
 slim-bridge. Verified with the Dockerfile's own composer flags. The code is on `main`; the
 deployment is **rolled back**.
 
+**Correction (later the same day): the second finding below was wrong.** The SDK did not
+destabilise quote. The 5s timeouts are a rollout defect that predates it and is reproducible
+on the uninstrumented image — see "What the timeouts actually were" at the end of this
+section. The middleware-ordering finding (1) stands.
+
 Two things went wrong, in order:
 
 1. **Middleware ordering.** Slim's `add()` prepends — the last middleware added is outermost
@@ -456,16 +461,53 @@ Two things went wrong, in order:
    6 hours before**, cascading into `/api/shipping` and `/api/checkout` 500s. Rolling back
    quote stopped them dead — zero in the following 5 minutes.
 
-The likely mechanism is specific to this service and written into its own source: quote runs
-on **ReactPHP's single-threaded event loop**, and `public/index.php` already carries a
-"workaround for non-async batch processors" that force-flushes the tracer on a timer. Every
-request now carried an extra span with base64 body attributes, so each flush had more to do
-— and a blocking flush on the event loop stalls every concurrent request, not just its own.
+The theory recorded here was that quote runs on **ReactPHP's single-threaded event loop**, and
+that the extra span with base64 body attributes made each of `index.php`'s periodic
+force-flushes longer, stalling concurrent requests. **That theory is wrong.**
 
-**Before retrying**, the thing to change is the export path, not the middleware: give quote a
-non-blocking exporter or a batch processor that does not force-flush on the loop, then
-re-measure the `shipping` → `quote` timeout rate. A single local request cannot surface this;
-the signal is timeout rate under concurrent load.
+### What the timeouts actually were
+
+It does not survive arithmetic: quote serves ~0.12 req/s. No per-request cost, and no 200ms
+flush, produces a 5s timeout at that rate. Four checks settled it:
+
+1. **The SDK is clean.** `APIToolkitMiddleware` takes the ambient tracer from
+   `Globals::tracerProvider()`, and `Shared::setAttributes` ends the span in a `finally`. No
+   exporter of its own, no `forceFlush`, no `SimpleSpanProcessor`, nothing per-request.
+2. **Every timeout sits next to a rollout.** All nine in 24h fall within 15–36s of a helm
+   operation touching quote — and there are none in between. Steady state is clean.
+3. **One of them cannot be the SDK.** The 09:30Z timeout landed during the *rollback to the
+   uninstrumented image*.
+4. **The instrumented build was fine under load.** It served 25 spans across 09:35–09:40Z. The
+   three timeouts blamed on it were all inside its rollout minute; the following four minutes
+   of real traffic produced zero.
+
+A controlled restart then reproduced it on demand, with no instrumentation anywhere:
+`kubectl rollout restart deploy/quote` at 10:27:54Z → 5s timeout at 10:28:07Z.
+
+**The mechanism is teardown, not startup.** The container answers 0.19s after start, so there
+is no meaningful readiness gap (and no demo service has a readiness probe anyway). But
+`index.php` exited the instant SIGTERM arrived, while kubernetes removes a terminating pod
+from Service endpoints *asynchronously*. kube-proxy keeps DNAT-ing new connections to a pod
+with nothing bound, so the packets are dropped rather than refused — the caller gets no error
+it could retry, just silence until its own 5s deadline.
+
+Fixed by draining: SIGTERM now schedules the exit 15s out and the loop keeps serving until
+then, inside the 30s grace period.
+
+**The "22 timeouts in 20 minutes" figure could not be reproduced.** At 1-minute granularity
+the worst burst in 24h is 4, and bursts last ~2 minutes, not 20. Treat the original number as
+unreliable.
+
+**Redeploy of the instrumented quote (711a520-quote, with the drain fix): helm revision 34.**
+Rollback if shipping→quote 5s timeouts appear outside a rollout minute:
+
+```
+helm rollback otel-demo 33
+```
+
+Note the rollout gap is not quote-specific — *no* demo service has a readiness probe, and none
+drains on SIGTERM. quote is simply the one that shows it, because `shipping` calls it
+synchronously behind a 5s deadline. Fixing it everywhere is upstream-PR material.
 
 ### The backends: what a native SDK can and cannot reach
 
