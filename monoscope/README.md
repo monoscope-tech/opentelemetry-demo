@@ -40,3 +40,4 @@ git-synced ones do not. Keeping the two in separate directories is what stops
 the wrong file reaching the wrong consumer.
 
 <!-- sync probe -->
+<!-- staleness probe -->
