@@ -1,0 +1,56 @@
+constants: null
+description: null
+discovery_metrics: null
+file: null
+icon: null
+preview: null
+refresh_interval: null
+tabs: null
+tags: []
+teams: []
+time_range: null
+title: Test
+variables: null
+widgets:
+- _dashboard_id: 5eb1df6e-f33a-4a3a-a613-6940e16a1a9b
+  _project_id: 00000000-0000-0000-0000-000000000000
+  hide_subtitle: true
+  id: 9a3d2f91-eebf-432d-95d1-16160c0e430b
+  layout:
+    h: 3
+    w: 3
+    x: null
+    'y': null
+  title: New Widget
+  type: timeseries
+  unit: ms
+- _dashboard_id: 5eb1df6e-f33a-4a3a-a613-6940e16a1a9b
+  _project_id: 00000000-0000-0000-0000-000000000000
+  hide_subtitle: true
+  id: af97f4f7-7cdb-47fb-9080-c500e1029b3d
+  layout:
+    h: 3
+    w: 3
+    x: null
+    'y': null
+  title: New Widget (Copy)
+  type: timeseries
+  unit: ms
+- _project_id: 00000000-0000-0000-0000-000000000000
+  eager: true
+  hide_subtitle: true
+  highlight_from: 2026-08-26T21:58:36.176Z
+  highlight_to: 2026-08-26T21:58:36.18049Z
+  id: e447390d-f4d6-4442-ace7-06bbcf75a3c6
+  layout:
+    h: 1
+    w: 2
+    x: 0
+    'y': 0
+  query: metrics | where metric_name == "k8s.pod.phase" | summarize avg(value) by
+    bin_auto(timestamp)
+  time_from: 2026-08-26T21:56:36.176Z
+  time_to: 2026-08-26T22:00:36.18049Z
+  title: k8s.pod.phase
+  type: timeseries_line
+  unit: ''
