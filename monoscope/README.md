@@ -38,3 +38,5 @@ These files use the `MonitorInput` shape, which is **not** the same schema as
 `dashboards/`. Dashboards applied through the CLI nest under `schema:`; the
 git-synced ones do not. Keeping the two in separate directories is what stops
 the wrong file reaching the wrong consumer.
+
+<!-- sync probe -->
