@@ -272,8 +272,99 @@ export function httpScenario() {
 
 // ---- browser tasks ----------------------------------------------------------
 
+// Session replay records what the DOM and the pointer actually did. A script
+// that only calls page.click() produces a recording of jump cuts: elements
+// change with no cursor anywhere near them, and nothing looks like a person.
+// The helpers below exist so the replay is watchable — they move the pointer
+// along a path, pause the way a reader does, and scroll before deciding.
+//
+// Every one of them degrades to a no-op if the underlying browser API is
+// missing. Cursor decoration must never be the reason the load generator
+// stops producing traffic.
+
+const viewport = { width: 1280, height: 800 }
+
+// Ease-in-out: people accelerate away from where they were and decelerate
+// into a target. Linear interpolation reads as robotic even at the right speed.
+function ease(t) {
+    return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
+}
+
+let cursor = { x: viewport.width / 2, y: viewport.height / 2 }
+
+async function moveCursorTo(page, x, y, steps = 18) {
+    try {
+        const from = cursor
+        for (let i = 1; i <= steps; i++) {
+            const t = ease(i / steps)
+            // A slight arc; a perfectly straight line is another robot tell.
+            const drift = Math.sin(t * Math.PI) * 14 * (cryptoRandom() - 0.5)
+            await page.mouse.move(from.x + (x - from.x) * t + drift, from.y + (y - from.y) * t + drift)
+            await page.waitForTimeout(8 + cryptoRandom() * 12)
+        }
+        cursor = { x, y }
+    } catch (e) {
+        // No mouse API — the click still happens, just without the travel.
+    }
+}
+
+// Move to an element's centre, pause as if reading it, then click it there.
+// Falls back to a plain click so a selector that resolves but has no box
+// (display:contents, zero-size wrapper) still advances the journey.
+async function moveAndClick(page, selector) {
+    try {
+        const el = await page.$(selector)
+        const box = el && (await el.boundingBox())
+        if (box) {
+            await moveCursorTo(page, box.x + box.width / 2, box.y + box.height / 2)
+            await page.waitForTimeout(200 + cryptoRandom() * 500)
+        }
+    } catch (e) {
+        // fall through to the plain click
+    }
+    await page.click(selector)
+}
+
+// Scroll in a few short bursts rather than one jump, pausing between them.
+async function readPage(page, bursts = 3) {
+    for (let i = 0; i < bursts; i++) {
+        try {
+            await page.mouse.wheel({ deltaY: 220 + cryptoRandom() * 380 })
+        } catch (e) {
+            break
+        }
+        await page.waitForTimeout(600 + cryptoRandom() * 1200)
+        // Drifting the pointer while reading is what a real cursor does.
+        await moveCursorTo(
+            page,
+            120 + cryptoRandom() * (viewport.width - 240),
+            160 + cryptoRandom() * (viewport.height - 320),
+            8
+        )
+    }
+}
+
+// Hover a few product tiles before committing to one — the browsing that makes
+// a replay look like shopping rather than a scripted click-through.
+async function browseProducts(page, count = 3) {
+    for (let i = 0; i < count; i++) {
+        const id = products[Math.floor(cryptoRandom() * products.length)]
+        try {
+            const el = await page.$(`a[href="/product/${id}"]`)
+            const box = el && (await el.boundingBox())
+            if (!box) continue
+            await moveCursorTo(page, box.x + box.width / 2, box.y + box.height / 2, 12)
+            await page.waitForTimeout(400 + cryptoRandom() * 900)
+        } catch (e) {
+            continue
+        }
+    }
+}
+
 async function changeCurrency(page) {
     await page.goto(`${BASE_URL}/cart`, { waitUntil: 'domcontentloaded' })
+    await readPage(page, 1)
+    await moveCursorTo(page, viewport.width - 220, 90)
     await page.selectOption('[name="currency_code"]', 'CHF')
     await page.waitForTimeout(2000)
 }
@@ -295,7 +386,9 @@ async function addProductToCartBrowser(page) {
         page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded' }),
     ])
     await page.waitForSelector('a[href="/product/2ZYFJ3GM2N"]', { timeout: 15000 })
-    await page.click('a[href="/product/2ZYFJ3GM2N"]')
+    await readPage(page, 2)
+    await browseProducts(page, 3)
+    await moveAndClick(page, 'a[href="/product/2ZYFJ3GM2N"]')
     // The product-link click is a client-side (SPA/pushState) route change, not
     // a full navigation - domcontentloaded already fired once for the initial
     // page load and never fires again for this transition. waitForLoadState
@@ -303,8 +396,50 @@ async function addProductToCartBrowser(page) {
     // new route, so the add-to-cart click below never finds its target. Wait
     // for the actual element instead - correct for both SPA and full navigation.
     await page.waitForSelector('[data-cy="product-add-to-cart"]', { timeout: 25000 })
-    await page.click('[data-cy="product-add-to-cart"]')
+    // Read the product page before adding it — the pause is the difference
+    // between a replay that looks like shopping and one that looks like a bot.
+    await readPage(page, 2)
+    await moveAndClick(page, '[data-cy="product-add-to-cart"]')
     await page.waitForTimeout(2000)
+}
+
+// The full funnel: land, browse, open a product, add it, review the cart and
+// place the order. This is the journey worth opening a replay to watch, and
+// the one that produces an end-to-end trace across frontend, cart, checkout,
+// payment, shipping and email.
+async function checkoutJourney(page) {
+    await Promise.all([
+        page.waitForResponse(/\/images\/products\//, { timeout: 25000 }),
+        page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded' }),
+    ])
+    await readPage(page, 2)
+    await browseProducts(page, 4)
+
+    const id = products[Math.floor(cryptoRandom() * products.length)]
+    await page.waitForSelector(`a[href="/product/${id}"]`, { timeout: 15000 })
+    await moveAndClick(page, `a[href="/product/${id}"]`)
+
+    await page.waitForSelector('[data-cy="product-add-to-cart"]', { timeout: 25000 })
+    await readPage(page, 2)
+    await moveAndClick(page, '[data-cy="product-add-to-cart"]')
+
+    // Adding to cart lands on the cart page already; give it a beat to render.
+    await page.waitForTimeout(1500 + cryptoRandom() * 1500)
+    await readPage(page, 2)
+
+    // Not every visit converts. A demo where every session ends in a purchase
+    // has no funnel to show, and the abandoned ones are the interesting half.
+    if (cryptoRandom() < 0.35) return
+
+    try {
+        await page.waitForSelector('[data-cy="checkout-place-order"]', { timeout: 15000 })
+        await moveAndClick(page, '[data-cy="checkout-place-order"]')
+        await page.waitForTimeout(3000)
+        await readPage(page, 1)
+    } catch (e) {
+        // The place-order control moves between demo versions; an abandoned
+        // cart is a perfectly good session, so this is not an error.
+    }
 }
 
 // ---- browser entrypoint -----------------------------------------------------
@@ -316,21 +451,40 @@ export async function browserScenario() {
     }
 
     const page = await browser.newPage()
-    const isCurrencyChange = cryptoRandom() < 0.5
-    const span = tracer.startSpan(isCurrencyChange ? 'browser_change_currency' : 'browser_add_to_cart')
+    // A viewport the replay player can show at a sensible size, and one the
+    // cursor helpers can aim inside of.
+    try {
+        await page.setViewportSize(viewport)
+    } catch (e) {
+        // older k6 browser builds; the defaults are close enough
+    }
+    cursor = { x: viewport.width / 2, y: viewport.height / 2 }
+
+    // Weighted so most sessions are the full funnel — that is the one worth
+    // watching — while the shorter flows keep the traffic mix varied.
+    const roll = cryptoRandom()
+    const flow = roll < 0.6 ? 'checkout' : roll < 0.8 ? 'add_to_cart' : 'change_currency'
+    const span = tracer.startSpan(`browser_${flow}`)
     try {
         await page.setExtraHTTPHeaders({ baggage: 'synthetic_request=true' })
-        if (isCurrencyChange) {
-            span.log('Currency changed to CHF')
-            await changeCurrency(page)
-        } else {
+        if (flow === 'checkout') {
+            span.log('Completed a browsing and checkout journey')
+            await checkoutJourney(page)
+        } else if (flow === 'add_to_cart') {
             span.log('Product added to cart successfully')
             await addProductToCartBrowser(page)
+        } else {
+            span.log('Currency changed to CHF')
+            await changeCurrency(page)
         }
     } catch (e) {
         console.error(`browser task error: ${e}`)
     } finally {
         span.end()
+        // Give the Monoscope replay recorder time to flush the tail of the
+        // session before the page goes away. Without this the last few seconds
+        // of every recording — usually the interesting part — never upload.
+        await page.waitForTimeout(3000)
         await page.close()
     }
 
