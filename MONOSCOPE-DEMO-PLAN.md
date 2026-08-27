@@ -742,7 +742,7 @@ Rollback to the pre-upgrade state: `helm rollback otel-demo 18`.
 
 1. **Payload capture on the backend services (§5).** Reuse `PayloadCapture.ts`'s redaction
    rules; `checkout` and `cart` first.
-3. **Stamp the git sha** into `service.version` at build time so code mappings follow the
+2. **Stamp the git sha** into `service.version` at build time so code mappings follow the
    deployed commit instead of a pinned tag (§9).
 3. **Replay session length.** Recordings are ~11s and cover a complete funnel, but the
    duration looks short for the journey that produced it. Worth checking against the
