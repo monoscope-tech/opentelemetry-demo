@@ -434,6 +434,26 @@ Bounded and defensive throughout: a depth cap so a cyclic body cannot hang a req
 nothing), and a response that still sends if serialization throws. Behaviour checks were
 run against the real checkout payload plus cyclic, oversized, non-JSON and empty inputs.
 
+### Deviation from the `monoscope-skills:instrument` skill — read before doing the backends
+
+The skill was consulted **after** this was built, and it prescribes a different path:
+payload capture belongs to the **native Monoscope SDKs**, via
+`captureRequestBody` / `captureResponseBody` plus `redactRequestBody` /
+`redactResponseBody` (JSONPath) / `redactHeaders`. For Next.js that package is
+**`@monoscopetech/next`** (published, 1.1.1).
+
+What is shipped here is a hand-rolled equivalent on top of the demo's existing vanilla
+OTel setup. It was kept because it is deployed and verified end to end, and because
+adopting `@monoscopetech/next` replaces the frontend's whole OTel bootstrap — which the
+demo deliberately routes through its own collector — so it is a larger change than it
+looks and not one to make unattended at 3am.
+
+**For the backend rollout, start from the skill, not from this file.** Take the native
+SDK for each language where one exists; fall back to this pattern only where none does.
+The skill's five required surfaces (incoming HTTP, outgoing HTTP, SQL, message queues,
+background jobs) are already covered by the demo's own auto-instrumentation — payload
+capture is the only gap.
+
 ### Remaining: the backend services
 
 Some services already emit body attributes through their own instrumentation —
@@ -744,10 +764,13 @@ Rollback to the pre-upgrade state: `helm rollback otel-demo 18`.
    rules; `checkout` and `cart` first.
 2. **Stamp the git sha** into `service.version` at build time so code mappings follow the
    deployed commit instead of a pinned tag (§9).
-3. **Replay session length.** Recordings are ~11s and cover a complete funnel, but the
-   duration looks short for the journey that produced it. Worth checking against the
-   known open monoscope bug where a session is marked merged after its first pass and the
-   rest is stranded.
+3. **Git-sync pull is intermittent — the most important open item.** Roughly every other
+   push is silently not processed: the webhook returns 200 and is logged as accepted, but
+   `projects.git_sync.last_revision` does not advance and no dashboard changes apply. The
+   next push that *does* run sweeps up everything the missed ones left, so nothing is
+   lost — it just arrives late and unpredictably. Observed 5 pushes: 3 synced in under
+   20s, 2 never synced at all until a later push. Reproduce by pushing twice in a row and
+   watching `last_revision`.
 4. **Event volume roughly tripled — decide if that is acceptable.** 87.9k events/hr before
    this work, **~264k/hr after**, on a project with a live Stripe subscription. No single
    runaway service; it is the 3.0.0 upgrade's extra services, browser RUM (~23k/hr), and
@@ -771,9 +794,11 @@ Each is a real bug in the product, found by using it rather than by reading it:
    account shown was one pick from several.
 4. **The git-sync settings page claims syncing "happens on a schedule or can be triggered
    manually".** Neither exists — a push webhook is the only pull trigger.
-5. **Replay payload contract drift.** The SDK sends nested `user`/`tenant` objects; the
+5. **Git-sync pull silently skips pushes** (see open item 3) — intermittent, ~40% miss
+   rate, webhook accepted with 200 each time.
+6. **Replay payload contract drift.** The SDK sends nested `user`/`tenant` objects; the
    server expects flat `userId`/`userEmail`/`userName`, so replay user metadata is
    permanently null and the player shows no user label.
-6. **A dashboard with an empty title round-trips to a file literally named `.yaml`.**
-7. **The demo project's API auth bypass permits anonymous writes**, not just reads — an
+7. **A dashboard with an empty title round-trips to a file literally named `.yaml`.**
+8. **The demo project's API auth bypass permits anonymous writes**, not just reads — an
    `X-Project-Id` header skips the `Authorization` check for the whole `/api/v1` surface.
