@@ -1,0 +1,193 @@
+constants: null
+description: null
+discovery_metrics: null
+file: null
+icon: null
+preview: null
+refresh_interval: null
+tabs: null
+tags: []
+teams: []
+time_range: null
+title: All Widget Types
+variables: null
+widgets:
+- layout:
+    h: 2
+    w: 3
+    x: 0
+    'y': 0
+  query: |
+    summarize count() by bin_auto(timestamp)
+  title: W timeseries
+  type: timeseries
+- layout:
+    h: 2
+    w: 3
+    x: 3
+    'y': 0
+  query: |
+    summarize count() by bin_auto(timestamp)
+  title: W timeseries_line
+  type: timeseries_line
+- layout:
+    h: 2
+    w: 3
+    x: 6
+    'y': 0
+  query: |
+    summarize count() by bin_auto(timestamp)
+  title: W timeseries_stat
+  type: timeseries_stat
+- layout:
+    h: 2
+    w: 3
+    x: 9
+    'y': 0
+  query: |
+    summarize count() by bin_auto(timestamp)
+  title: W stat
+  type: stat
+- layout:
+    h: 2
+    w: 3
+    x: 0
+    'y': 2
+  query: |
+    summarize count() by bin_auto(timestamp)
+  title: W list
+  type: list
+- layout:
+    h: 2
+    w: 3
+    x: 3
+    'y': 2
+  query: |
+    summarize count() by bin_auto(timestamp)
+  title: W top_list
+  type: top_list
+- layout:
+    h: 2
+    w: 3
+    x: 6
+    'y': 2
+  query: |
+    summarize count() by bin_auto(timestamp)
+  title: W distribution
+  type: distribution
+- layout:
+    h: 2
+    w: 3
+    x: 9
+    'y': 2
+  query: |
+    summarize count() by bin_auto(timestamp)
+  title: W geomap
+  type: geomap
+- layout:
+    h: 2
+    w: 3
+    x: 0
+    'y': 4
+  query: |
+    summarize count() by bin_auto(timestamp)
+  title: W funnel
+  type: funnel
+- layout:
+    h: 2
+    w: 3
+    x: 3
+    'y': 4
+  query: |
+    summarize count() by bin_auto(timestamp)
+  title: W tree_map
+  type: tree_map
+- layout:
+    h: 2
+    w: 3
+    x: 6
+    'y': 4
+  query: |
+    summarize count() by bin_auto(timestamp)
+  title: W pie_chart
+  type: pie_chart
+- layout:
+    h: 2
+    w: 3
+    x: 9
+    'y': 4
+  query: |
+    summarize count() by bin_auto(timestamp)
+  title: W anomalies
+  type: anomalies
+- layout:
+    h: 2
+    w: 3
+    x: 0
+    'y': 6
+  query: |
+    summarize count() by bin_auto(timestamp)
+  title: W table
+  type: table
+- layout:
+    h: 2
+    w: 3
+    x: 3
+    'y': 6
+  query: |
+    summarize count() by bin_auto(timestamp)
+  title: W traces
+  type: traces
+- layout:
+    h: 2
+    w: 3
+    x: 6
+    'y': 6
+  query: |
+    summarize count() by bin_auto(timestamp)
+  title: W flamegraph
+  type: flamegraph
+- layout:
+    h: 2
+    w: 3
+    x: 9
+    'y': 6
+  query: |
+    summarize count() by bin_auto(timestamp)
+  title: W service_map
+  type: service_map
+- layout:
+    h: 2
+    w: 3
+    x: 0
+    'y': 8
+  query: |
+    summarize count() by bin_auto(timestamp)
+  title: W heatmap
+  type: heatmap
+- layout:
+    h: 2
+    w: 3
+    x: 3
+    'y': 8
+  query: |
+    summarize count() by bin_auto(timestamp)
+  title: W logs
+  type: logs
+- children:
+  - layout:
+      h: 2
+      w: 3
+      x: null
+      'y': null
+    query: |
+      summarize count() by bin_auto(timestamp)
+    title: W nested
+    type: stat
+  layout:
+    h: 4
+    w: 12
+    x: 0
+    'y': 24
+  title: W group
+  type: group
