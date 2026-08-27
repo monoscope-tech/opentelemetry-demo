@@ -39,11 +39,8 @@ const InstrumentationMiddleware = (handler: NextApiHandler): NextApiHandler =>
     captureRequestBody: true,
     captureResponseBody: true,
     redactHeaders: ['authorization', 'cookie', 'set-cookie', 'x-api-key'],
-    // Both lists carry the same paths on purpose. @monoscopetech/next 1.1.1 redacts the
-    // response body with `redactRequestBody` — `redactResponseBody` is accepted and then
-    // ignored — so listing these only under the response key would ship the checkout
-    // response's address and card fields in the clear. Fixed upstream on
-    // monoscope-js#fix/redact-response-body; the duplicate can go once that ships.
+    // The same paths on both sides because the checkout payload is echoed back in the
+    // order confirmation, so the response carries the address just as the request does.
     redactRequestBody: SENSITIVE_PATHS,
     redactResponseBody: SENSITIVE_PATHS,
   }) as NextApiHandler;
