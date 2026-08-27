@@ -9,6 +9,7 @@ import CartProvider from '../providers/Cart.provider';
 import { ThemeProvider } from 'styled-components';
 import Theme from '../styles/Theme';
 import FrontendTracer from '../utils/telemetry/FrontendTracer';
+import { initMonoscope } from '../utils/telemetry/MonoscopeRUM';
 import SessionGateway from '../gateways/Session.gateway';
 import { OpenFeatureProvider, OpenFeature } from '@openfeature/react-sdk';
 import { FlagdWebProvider } from '@openfeature/flagd-web-provider';
@@ -20,11 +21,20 @@ declare global {
       NEXT_PUBLIC_OTEL_SERVICE_NAME?: string;
       NEXT_PUBLIC_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT?: string;
       IS_SYNTHETIC_REQUEST?: string;
+      NEXT_PUBLIC_MONOSCOPE_API_KEY?: string;
+      NEXT_PUBLIC_MONOSCOPE_OTLP_ENDPOINT?: string;
+      NEXT_PUBLIC_MONOSCOPE_APP_URL?: string;
+      NEXT_PUBLIC_MONOSCOPE_REPLAY_SAMPLE_RATE?: string;
     };
   }
 }
 
 if (typeof window !== 'undefined') {
+  // Fire-and-forget: initMonoscope resolves asynchronously (the SDK can only
+  // be imported dynamically — see MonoscopeRUM), but the session id it shares
+  // with FrontendTracer is seeded synchronously inside it, so ordering here
+  // does not affect whether spans and replays land on the same session.
+  initMonoscope();
   FrontendTracer();
   if (window.location) {
     const session = SessionGateway.getSession();

@@ -279,6 +279,13 @@ services:
       - OTEL_COLLECTOR_HOST
       - FLAGD_HOST
       - FLAGD_PORT
+      # Monoscope RUM (browser traces, web vitals, session replay). Leave
+      # MONOSCOPE_API_KEY unset to run the demo with RUM switched off; the
+      # frontend skips SDK init entirely rather than failing.
+      - MONOSCOPE_API_KEY
+      - MONOSCOPE_OTLP_ENDPOINT
+      - MONOSCOPE_APP_URL
+      - MONOSCOPE_REPLAY_SAMPLE_RATE
     healthcheck:
       test: ["CMD", "/nodejs/bin/node", "-e", "require('net').connect(${FRONTEND_PORT},require('os').hostname(),function(){process.exit(0)}).on('error',function(){process.exit(1)})"]
       start_period: 60s

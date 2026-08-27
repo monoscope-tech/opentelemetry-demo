@@ -58,3 +58,6 @@ src/frontend/cypress/screenshots
 src/shipping/target/
 
 !src/currency/build
+
+# Generated: carries the fork image tags and the browser RUM key.
+monoscope-k8s/otel-demo-images.yaml

@@ -1,0 +1,45 @@
+# Example of the generated, gitignored `otel-demo-images.yaml`.
+#
+# Copy to `otel-demo-images.yaml` and fill in, or run:
+#   make monoscope-images-values TAG=<git-sha> MONOSCOPE_API_KEY=<rum-key>
+#
+# This is the only place the fork's own images and the browser RUM key are
+# configured. Apply it alongside otel-demo-overlay.yaml — helm merges multiple
+# -f values files, and --reset-values only clears values from *previous*
+# releases, not ones passed in the same command.
+
+components:
+  # Frontend built from this fork, so the Monoscope browser SDK is in the
+  # bundle. Every other service stays on the upstream image.
+  #
+  # `useDefault.env: true` keeps the chart's own frontend env and appends ours.
+  # Dropping it unsets every backend gRPC address and the frontend fails to
+  # reach any service — the failure looks like a broken build, not a config
+  # mistake, so leave it alone.
+  frontend:
+    imageOverride:
+      repository: ghcr.io/monoscope-tech/demo
+      tag: REPLACE_WITH_GIT_SHA-frontend
+    useDefault:
+      env: true
+    env:
+      # Public by nature: this ships to every browser. It is a RUM key for the
+      # public demo project, not a server credential.
+      - name: MONOSCOPE_API_KEY
+        value: "REPLACE_WITH_RUM_KEY"
+      - name: MONOSCOPE_OTLP_ENDPOINT
+        value: https://otelcol.monoscope.tech/v1/traces
+      - name: MONOSCOPE_APP_URL
+        value: https://app.monoscope.tech
+      # 1 = record every session.
+      - name: MONOSCOPE_REPLAY_SAMPLE_RATE
+        value: "1"
+
+  # Load generator built from this fork, for the richer browser journeys that
+  # make session replays worth watching.
+  load-generator:
+    imageOverride:
+      repository: ghcr.io/monoscope-tech/demo
+      tag: REPLACE_WITH_GIT_SHA-load-generator
+    useDefault:
+      env: true
