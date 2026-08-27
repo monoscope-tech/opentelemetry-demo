@@ -72,13 +72,11 @@ config:
     #   - a service excluded here that does NOT ship OTLP logs has its logs
     #     dropped entirely, with nothing to notice
     #
-    # Verify against the data rather than by reading the deployment list:
-    #
-    #   monoscope chart 'kind == "log" and context.trace_id != ""
-    #                    | summarize count(*) by resource.service.name' --since 15m
-    #
-    # Every service that query returns belongs here; nothing else does. Last
-    # verified against the live demo project 2026-08-27, chart 0.41.0.
+    # Verify against the data rather than by reading the deployment list —
+    # ./verify-filelog-excludes.sh does exactly that and exits non-zero on drift
+    # in either direction, so it can gate a deploy instead of being something
+    # someone remembers to run. Last run 2026-08-27 against the live demo
+    # project on chart 0.41.0: in sync, 14 services.
     filelog:
       exclude:
         # keep the agent's own self-exclusion (preset default)
