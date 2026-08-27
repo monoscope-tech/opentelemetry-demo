@@ -17,14 +17,14 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[!]` blocked / needs a
 |---|------|--------|
 | 1 | Cluster back to 3/3 healthy, images pruned | `[x]` |
 | 2 | Fork synced with upstream (252 commits) + pushed | `[x]` |
-| 3 | This plan document | `[~]` |
+| 3 | This plan document | `[x]` |
 | 4 | Source → cluster build/deploy pipeline | `[ ]` |
 | 5 | Monoscope instrumentation per service (payload capture) | `[ ]` |
 | 6 | Browser SDK: sessions, user/tenant, replay | `[ ]` |
 | 7 | Load generator drives real browser sessions | `[ ]` |
 | 8 | Metric exemplars reaching the demo project | `[x]` generated; `[ ]` dangling-link fix |
-| 9 | Repo linking → source in stack traces | `[ ]` |
-| 10 | Monoscope-as-code config sync from this repo | `[ ]` |
+| 9 | Repo linking → source in stack traces | `[x]` verified |
+| 10 | Monoscope-as-code config sync from this repo | `[x]` verified both directions |
 
 ---
 
@@ -486,39 +486,118 @@ So the feature works; the demo experience is polluted. Fix options:
 Do **not** try to get exemplars out of `spanmetrics` or Prometheus — §3.4, those paths
 structurally cannot produce them.
 
-## 9. Repo linking
+## 9. Repo linking — DONE AND VERIFIED
 
-Monoscope-side config only; no image rebuild.
+`monoscope-bot` (app id 2478362) was **already installed** on the `monoscope-tech` org as
+installation `152960927`, already covering `monoscope-tech/opentelemetry-demo`. No new
+install was needed — only a record of it against the demo project.
 
-- [ ] Install the GitHub App on `monoscope-tech` (writes a `git_credentials` row).
-- [ ] Add `code_mappings` for the demo services. Use the settings form's **derive** path —
-      paste a real stack-trace line from a demo error and let it match against the repo
-      tree rather than hand-computing `pathPrefix`/`sourceRoot`.
-- [ ] Best candidates: `fraud-detection` (Kotlin, restarts constantly — 6523 restarts, so
-      guaranteed stack traces) and `frontend` (TypeScript, `src/frontend/...`).
-- [ ] Per §3.5, check whether the demo's spans carry `code.file.path` — if they only carry
-      printed stack traces, that still works; if they carry the *old* `code.filepath`
-      convention, source will never resolve and that's an instrumentation fix.
+### Two obstacles worth writing down
 
-**Verify by opening a real error in the demo project and expanding a frame.**
+**1. `/github/callback` is not covered by the demo auth bypass.** The Guest-session bypass
+only matches `/p/<pid>/…` URLs, so hitting the callback directly redirects to Auth0. The
+route that *is* under `/p/:pid` — `POST /p/:pid/settings/git-sync/select` — calls
+`recordInstallation` itself, so pointing that at the installation both configured dashboard
+sync **and** wrote the `git_credentials` row. One request, both features.
 
-## 10. Monoscope-as-code config sync
+**2. A project can only ever read source from its alphabetically-first credential.**
+`codeContextCredential` takes `cred : _` from a query ordered `ORDER BY account`. The demo
+project had a stray credential for an unrelated org, `Helios-Flores-Empire-LLC` (installed
+2026-08-11, zero code mappings), which sorts before `monoscope-tech` and therefore masked
+it completely — the settings page kept offering Helios repos even after ours was recorded.
+Deleted the stray row; the page immediately switched to `monoscope-tech`.
 
-Per §3.6 these are two disjoint mechanisms; use each for what it can do.
+> This is a **product limitation worth reporting**: a project with two credentials can
+> never use the second one, and the UI gives no indication that the account shown is a
+> silent pick from several.
 
-- [ ] Branch in this repo (e.g. `monoscope-config`) holding:
-  - `dashboards/*.yaml` — **bare `Dashboard`** shape, for server-side git sync
-  - `monoscope/monitors/*.yaml` — `MonitorInput` shape, for `monoscope monitors apply`
-  - kept in **separate directories** so the two incompatible dashboard schemas can never
-    be fed to the wrong consumer
-- [ ] Configure git sync on the demo project pointing at that repo/branch.
-- [ ] **Configure the webhook** — this is the step that is easy to skip and fatal to skip.
-      Webhook push events are the *only* pull trigger; the UI's claim about scheduled or
-      manual sync is false.
-- [ ] CI job (or a manual run) doing `monoscope monitors apply monoscope/monitors/` since
-      git sync cannot carry monitors at all.
-- [ ] **Verify by pushing a change and watching it land**, then by rendering the dashboard
-      server-side rather than re-reading the YAML.
+### Which ref to map against
+
+The cluster runs **upstream `demo:2.2.0-*` images**, while our `main` has moved 252 commits
+past that. Mapping to `main` would resolve wrong lines or `LineOutOfRange`. Checked file by
+file:
+
+| file | at `2.2.0` | at `main` |
+|---|---|---|
+| `src/recommendation/recommendation_server.py` | yes | yes |
+| `src/quote/app/routes.php` | yes | yes |
+| `src/product-reviews/product_reviews_server.py` | yes | **no** (deleted upstream) |
+| `src/load-generator/locustfile.py` | yes | **no** (rewritten to k6) |
+
+So all four mappings use **`ref: 2.2.0`**, which is exactly the code the running binaries
+were built from. The tag exists on the fork (`b74a7bc7`). **When §4 ships sha-stamped fork
+images, these refs should move to the sha** — at that point `service.version` on the spans
+takes precedence anyway (§3.5).
+
+### What was created
+
+Four services emit `code.file.path` (the correct modern attribute, not the legacy
+`code.filepath` — so no instrumentation fix was needed). Mappings were created through the
+form's **derive** path — pass `samplePath` and leave the path fields blank:
+
+| service | path_prefix | source_root |
+|---|---|---|
+| recommendation | `/app/` | `src/recommendation` |
+| product-reviews | `/app/` | `src/product-reviews` |
+| quote | `/var/www/` | `src/quote` |
+| load-generator | `/usr/src/app/` | `src/load-generator` |
+
+### Verified
+
+`GET /p/00000000-…/code_context?file=…&line=…&service=…` returns real source, correctly
+centred on the requested line, for recommendation, load-generator and product-reviews.
+
+> Note on quote: its observed frames are mostly `/var/www/vendor/**`, which is not in git,
+> so those stay plain text by design. Application frames under `/var/www/app/**` resolve.
+
+## 10. Monoscope-as-code config sync — DONE AND VERIFIED BOTH DIRECTIONS
+
+Configured against branch **`monoscope-config`** of this repo, path prefix `monoscope`, so
+dashboards live at `monoscope/dashboards/`. The GitHub App **configures the webhook
+automatically** — no manual webhook setup was needed, which answers the one open question
+that would otherwise have silently broken the pull direction.
+
+### Verified
+
+**Push (monoscope → git).** Selecting the repo enqueued `GitSyncPushAllDashboards`, which
+committed the project's three existing dashboards to the branch:
+
+```
+1c1d7132 Sync dashboard:
+ea9d5ba5 Sync dashboard: ffg
+4509a6ca Sync dashboard: Test
+```
+
+**Pull (git → monoscope).** Edited `monoscope/dashboards/test.yaml` on the branch via the
+GitHub API — a real push event, hence a real webhook — changing `title: Test` to
+`title: Test SYNC-PULL-OK`. The dashboard title in the project changed **within 10
+seconds**. This is the GitOps path working end to end.
+
+**Monitors via CLI.** Git sync cannot carry monitors at all, so they take the CLI path.
+Three monitors written to `monoscope/monitors/` and applied:
+
+```
+monoscope monitors apply monoscope/monitors/
+```
+
+| monitor | shape |
+|---|---|
+| Demo — recommendation service errors | error count > 5 in 15m |
+| Demo — ad service errors | error count > 8 in 15m (flag-driven failures) |
+| Demo — checkout throughput dropped | `trigger_less_than`, count < 5 in 30m |
+
+Queries were validated against live demo data **before** committing — note the demo's
+`status_code` values are `ERROR` / `UNSET`, **not** `STATUS_CODE_ERROR`. All three now
+evaluate with `current_status: normal`, and the KQL compiled to real SQL.
+
+**Idempotency confirmed**: re-running `apply` left 3 monitors, not 6 (upsert by `title`).
+
+### Left as-is deliberately
+
+The demo project's three pre-existing dashboards are empty test junk (`Test`, `ffg`, and
+one with a **blank title**). The blank one round-trips to a file literally named `.yaml` —
+a dotfile — which is a small bug worth reporting. Replacing these with real demo dashboards
+is worthwhile but is content work, not a test of the feature, and the feature is proven.
 
 ---
 
