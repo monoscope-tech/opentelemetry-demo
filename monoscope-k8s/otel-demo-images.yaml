@@ -1,0 +1,69 @@
+# GENERATED — gitignored. See otel-demo-images.example.yaml.
+#
+# WARNING: supplying `env` for a component REPLACES the chart's own env list
+# for that component. `useDefault.env: true` does NOT merge it back — it only
+# controls the chart-wide default block. Every variable the chart sets for the
+# frontend is therefore repeated here verbatim, with the Monoscope ones added
+# at the end. Omitting them unsets every backend address and the frontend
+# cannot reach a single service.
+#
+# Re-sync against:
+#   helm show values open-telemetry/opentelemetry-demo --version 0.41.0
+components:
+  frontend:
+    imageOverride:
+      repository: ghcr.io/monoscope-tech/demo
+      tag: deb441b-frontend
+    useDefault:
+      env: true
+    env:
+      # --- chart defaults, copied verbatim (chart 0.41.0) ---
+      - name: FRONTEND_PORT
+        value: "8080"
+      - name: PORT
+        value: $(FRONTEND_PORT)
+      - name: FRONTEND_ADDR
+        value: frontend:8080
+      - name: AD_ADDR
+        value: ad:8080
+      - name: CART_ADDR
+        value: cart:8080
+      - name: CHECKOUT_ADDR
+        value: checkout:8080
+      - name: CURRENCY_ADDR
+        value: currency:8080
+      - name: PRODUCT_CATALOG_ADDR
+        value: product-catalog:8080
+      - name: RECOMMENDATION_ADDR
+        value: recommendation:8080
+      - name: SHIPPING_ADDR
+        value: http://shipping:8080
+      - name: FLAGD_HOST
+        value: flagd
+      - name: FLAGD_PORT
+        value: "8013"
+      - name: ENV_PLATFORM
+        value: kubernetes
+      - name: OTEL_COLLECTOR_HOST
+        value: $(OTEL_COLLECTOR_NAME)
+      - name: OTEL_EXPORTER_OTLP_ENDPOINT
+        value: http://$(OTEL_COLLECTOR_NAME):4317
+      - name: WEB_OTEL_SERVICE_NAME
+        value: frontend-web
+      - name: PUBLIC_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+        value: http://localhost:8080/otlp-http/v1/traces
+      - name: OTEL_RESOURCE_ATTRIBUTES_EXTRA
+        value: service.criticality=critical
+      # --- Monoscope RUM ---
+      - name: MONOSCOPE_API_KEY
+        value: "xvNPecJKbi4znIBI1KZsGT0c9DiUHdeevLPk0+kPoj5V99vD"
+      - name: MONOSCOPE_OTLP_ENDPOINT
+        value: https://otelcol.monoscope.tech/v1/traces
+      - name: MONOSCOPE_APP_URL
+        value: https://app.monoscope.tech
+      - name: MONOSCOPE_REPLAY_SAMPLE_RATE
+        value: "1"
+  load-generator:
+    imageOverride:
+      repository: ghcr.io/monoscope-tech/demo
+      tag: 0d0f95d-load-generator
