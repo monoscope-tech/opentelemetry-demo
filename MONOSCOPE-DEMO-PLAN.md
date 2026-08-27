@@ -434,51 +434,70 @@ Bounded and defensive throughout: a depth cap so a cyclic body cannot hang a req
 nothing), and a response that still sends if serialization throws. Behaviour checks were
 run against the real checkout payload plus cyclic, oversized, non-JSON and empty inputs.
 
-### Deviation from the `monoscope-skills:instrument` skill — read before doing the backends
+### The frontend now uses the native SDK
 
-The skill was consulted **after** this was built, and it prescribes a different path:
-payload capture belongs to the **native Monoscope SDKs**, via
-`captureRequestBody` / `captureResponseBody` plus `redactRequestBody` /
-`redactResponseBody` (JSONPath) / `redactHeaders`. For Next.js that package is
-**`@monoscopetech/next`** (published, 1.1.1).
+`utils/telemetry/InstrumentationMiddleware.ts` wraps every `/api` route with
+**`withMonoscopePagesRouter`** from `@monoscopetech/next`, with `captureRequestBody` /
+`captureResponseBody` on and JSONPath redaction.
 
-What is shipped here is a hand-rolled equivalent on top of the demo's existing vanilla
-OTel setup. It was kept because it is deployed and verified end to end, and because
-adopting `@monoscopetech/next` replaces the frontend's whole OTel bootstrap — which the
-demo deliberately routes through its own collector — so it is a larger change than it
-looks and not one to make unattended at 3am.
+This replaced a hand-rolled hook, and the reason is a correctness one rather than taste.
+Monoscope only lifts bodies out of a span and into the **Req/Resp Body tabs** when:
 
-**For the backend rollout, start from the skill, not from this file.** Take the native
-SDK for each language where one exists; fall back to this pattern only where none does.
-The skill's five required surfaces (incoming HTTP, outgoing HTTP, SQL, message queues,
-background jobs) are already covered by the demo's own auto-instrumentation — payload
-capture is the only gap.
+1. the span is one of its own — `sdkSpanNames = ["apitoolkit-http-span", "monoscope.http"]`
+   (`Telemetry.hs:967`), checked as `isOurSdkSpan` in `OtlpServer.hs:1266`; and
+2. the body attribute is **base64**, which `extractBody` runs through `b64ToJson`.
 
-### Remaining: the backend services
+The hand-rolled version set `http.request.body` to raw JSON on the ambient span. The
+attributes were searchable, but the panel that exists to show payloads stayed empty — which
+reads as the feature being broken. The SDK emits exactly the contract the server decodes.
 
-Some services already emit body attributes through their own instrumentation —
-`shipping`, `quote`, `image-provider` and `flagd` show up with `http.request.body`
-already. The rest need a per-service hook, and the insertion point differs by wiring:
+It composes rather than replaces: the SDK takes no exporter configuration and writes to the
+ambient tracer, so the demo's own OTel bootstrap and collector routing are untouched.
 
-| Wiring | Services | Where the hook goes |
-|---|---|---|
-| javaagent | ad, fraud-detection, kafka | env vars |
-| .NET auto (`instrument.sh`) | accounting | env vars |
-| `opentelemetry-instrument` | recommendation | env vars |
-| `NODE_OPTIONS --require` | payment | env vars |
-| PHP ext + autoloader | quote | env vars |
-| declarative config | product-catalog | `otel-config.yml` |
-| hand-written SDK bootstrap | checkout, cart, currency, email, shipping, flagd-ui, chatbot | that file |
-| Next.js API routes | frontend | `utils/telemetry/InstrumentationMiddleware.ts` — already wraps every handler and has req+res in scope |
-| nginx / Envoy | image-provider, telemetry-docs, frontend-proxy | module/filter config |
+> **Both redaction lists carry the same paths on purpose.** `@monoscopetech/next@1.1.1`
+> redacts the *response* body with `redactRequestBody` — `redactResponseBody` is accepted
+> and then ignored. Listing the checkout paths only under the response key would ship
+> addresses and card fields in the clear. Fixed upstream in
+> [monoscope-js#31](https://github.com/monoscope-tech/monoscope-js/pull/31); the duplicate
+> can go once that ships.
 
-**Reuse `PayloadCapture.ts`'s rules when doing these** — every one of them will carry the
-same checkout PII through, and each language needs the same key-based redaction before
-the body reaches a span. Do not enable capture on a service without it.
+### The backends: what a native SDK can and cannot reach
 
-Order by demo value: `checkout` and `cart` (the funnel), then `product-catalog` and
-`recommendation`, then the rest. Each needs an image build and an `imageOverride` entry,
-so the cost is per-service — which is why the frontend went first: one hook, whole API.
+The honest answer is that **most of the demo cannot take a native SDK at all**, because the
+SDKs are HTTP-framework middlewares and most demo services speak gRPC.
+
+| service | language | transport | native SDK? |
+|---|---|---|---|
+| frontend | Next.js | HTTP | **yes — shipped** (`@monoscopetech/next`) |
+| quote | PHP / Slim | HTTP | SDK exists, **blocked** — see below |
+| email | Ruby / Sinatra | HTTP | no SDK |
+| shipping | Rust / actix-web | HTTP | no SDK |
+| flagd-ui | Elixir / Phoenix | HTTP | no SDK |
+| image-provider, telemetry-docs | nginx | HTTP | no SDK (module config only) |
+| frontend-proxy | Envoy | HTTP | no SDK (native tracer only) |
+| checkout, product-catalog | Go | **gRPC** | SDK is `net/http` middleware only |
+| cart, accounting | .NET | **gRPC** / Kafka | n/a |
+| ad, fraud-detection | Java / Kotlin | **gRPC** / Kafka | n/a |
+| recommendation | Python | **gRPC** | n/a |
+| payment | Node | **gRPC** | n/a |
+| currency | C++ | **gRPC** | n/a |
+
+`monoscope-go` was checked directly: it ships `chi`, `echo`, `fiber`, `gin`, `gorilla` and
+`native` middlewares and contains **no gRPC support at all** — so the two Go services are
+out of reach even though a Go SDK exists.
+
+**`quote` is blocked on a dependency conflict, not on effort.** `apitoolkit/apitoolkit-slim`
+v2.0.4 emits the right contract (it builds an OTel span literally named
+`apitoolkit-http-span`), but its `composer.json` requires `php-di/php-di: ^6.4` while the
+demo pins `7.1.1` — and `php-di/slim-bridge 3.4.1` needs the 7.x line. The SDK's own source
+does not reference php-di anywhere, so this is a stale constraint: relaxing it to
+`^6.4 || ^7.0` upstream unblocks the service. That one-line change is the next step for the
+backends, not a rewrite.
+
+**For everything with no SDK, the path is the contract, not a package**: emit a span named
+`monoscope.http` (or `apitoolkit-http-span`) carrying base64 `http.request.body` /
+`http.response.body`, with redaction applied before encoding. That is all the server keys
+off, and it is what the frontend now gets for free from the SDK.
 
 ## 6. Browser SDK — sessions, user/tenant, replay
 
