@@ -50,6 +50,27 @@ $routes($app);
 // Add Body Parsing Middleware
 $app->addBodyParsingMiddleware();
 
+// Monoscope: capture request/response payloads on the span.
+//
+// Added AFTER addBodyParsingMiddleware because Slim runs middleware outermost-last: this
+// executes around the body parser, so the parsed body is available by the time the span is
+// built. Registered before the error middleware for the same reason — a request that ends
+// in a 500 is exactly the one whose payload is worth having.
+//
+// It composes with the OTel setup already in this service: the middleware takes the ambient
+// tracer from Globals::tracerProvider() and adds no exporter of its own.
+//
+// Redaction is by JSONPath and runs before the body reaches the span. The quote service
+// only receives shipping dimensions and an address, but the address is still a real one, so
+// it is redacted rather than shipped.
+$app->add(new \APIToolkit\APIToolkitMiddleware([
+    'captureRequestBody' => true,
+    'captureResponseBody' => true,
+    'redactHeaders' => ['authorization', 'cookie', 'x-api-key'],
+    'redactRequestBody' => ['$..address', '$..streetAddress', '$..zipCode', '$..email'],
+    'redactResponseBody' => ['$..address', '$..streetAddress', '$..zipCode', '$..email'],
+]));
+
 // Add Error Middleware
 $errorMiddleware = $app->addErrorMiddleware(true, true, true);
 Loop::get()->addSignal(SIGTERM, function() {
