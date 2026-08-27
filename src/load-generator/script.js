@@ -326,6 +326,8 @@ async function moveAndClick(page, selector) {
 }
 
 // Scroll in a few short bursts rather than one jump, pausing between them.
+// The pauses are what a replay actually shows: a session that scrolls through
+// a page in 300ms reads as a script no matter how smooth the cursor is.
 async function readPage(page, bursts = 3) {
     for (let i = 0; i < bursts; i++) {
         try {
@@ -333,7 +335,7 @@ async function readPage(page, bursts = 3) {
         } catch (e) {
             break
         }
-        await page.waitForTimeout(600 + cryptoRandom() * 1200)
+        await page.waitForTimeout(1200 + cryptoRandom() * 2000)
         // Drifting the pointer while reading is what a real cursor does.
         await moveCursorTo(
             page,
@@ -354,7 +356,7 @@ async function browseProducts(page, count = 3) {
             const box = el && (await el.boundingBox())
             if (!box) continue
             await moveCursorTo(page, box.x + box.width / 2, box.y + box.height / 2, 12)
-            await page.waitForTimeout(400 + cryptoRandom() * 900)
+            await page.waitForTimeout(900 + cryptoRandom() * 1600)
         } catch (e) {
             continue
         }
@@ -432,12 +434,32 @@ async function checkoutJourney(page) {
     await moveAndClick(page, `a[href="/product/${id}"]`)
 
     await page.waitForSelector('[data-cy="product-add-to-cart"]', { timeout: 25000 })
-    await readPage(page, 2)
+    await readPage(page, 3)
     await moveAndClick(page, '[data-cy="product-add-to-cart"]')
 
     // Adding to cart lands on the cart page already; give it a beat to render.
     await page.waitForTimeout(1500 + cryptoRandom() * 1500)
-    await readPage(page, 2)
+    await readPage(page, 3)
+
+    // Second lap: go back and look at another product before deciding. Real
+    // carts get built over more than one page view, and it doubles the length
+    // of the recording without inventing behaviour nobody does.
+    if (cryptoRandom() < 0.5) {
+        const second = products[Math.floor(cryptoRandom() * products.length)]
+        try {
+            await page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded' })
+            await readPage(page, 2)
+            await browseProducts(page, 3)
+            await page.waitForSelector(`a[href="/product/${second}"]`, { timeout: 15000 })
+            await moveAndClick(page, `a[href="/product/${second}"]`)
+            await page.waitForSelector('[data-cy="product-add-to-cart"]', { timeout: 25000 })
+            await readPage(page, 2)
+            await moveAndClick(page, '[data-cy="product-add-to-cart"]')
+            await page.waitForTimeout(1500 + cryptoRandom() * 1500)
+        } catch (e) {
+            // One product in the cart is still a complete session.
+        }
+    }
 
     // Not every visit converts. A demo where every session ends in a purchase
     // has no funnel to show, and the abandoned ones are the interesting half.
