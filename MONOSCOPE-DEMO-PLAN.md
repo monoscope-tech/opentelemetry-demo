@@ -18,7 +18,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[!]` blocked / needs a
 | 1 | Cluster back to 3/3 healthy, images pruned | `[x]` |
 | 2 | Fork synced with upstream (252 commits) + pushed | `[x]` |
 | 3 | This plan document | `[x]` |
-| 4 | Source → cluster build/deploy pipeline | `[ ]` |
+| 4 | Source → cluster build/deploy pipeline | `[x]` chart upgraded + build workflow |
 | 5 | Monoscope instrumentation per service (payload capture) | `[ ]` |
 | 6 | Browser SDK: sessions, user/tenant, replay | `[ ]` |
 | 7 | Load generator drives real browser sessions | `[ ]` |
@@ -321,22 +321,58 @@ The drift is already visible — the cluster still runs `llm` and `product-revie
 but upstream **deleted both services**, and the repo is now on `IMAGE_VERSION=3.0.0` while
 the cluster is on 2.2.0.
 
-### What has to be built
+### Chart upgraded to 0.41.0 (app 3.0.0) — DONE
 
-- [ ] Un-fork-guard (or replace) the image build workflow so the fork pushes to
-      `ghcr.io/monoscope-tech/demo:<tag>-<service>`, mirroring upstream's tag shape.
-      GitHub Actions gives free amd64 runners; the nodes are amd64 and a local Mac is
-      arm64, so building locally means slow `buildx --platform linux/amd64` emulation.
-- [ ] Add per-component `image.repository` / `image.tag` overrides to
-      `otel-demo-overlay.yaml`. **`make k8s-apply-otel-demo-overlay` runs with
-      `--reset-values`**, so the overlay must carry the complete set of user values —
-      a partial overlay silently drops the memory limits and the monoscope exporter.
+The cluster ran chart `0.40.7` / app `2.2.0` while our source tree had moved to 3.0.0.
+Rather than backport onto a frontend and load generator that no longer exist in our
+source, the cluster was upgraded so cluster ↔ source ↔ chart agree. This also ships the
+**k6 + headless-Chromium load generator** that §7 needs, with `K6_BROWSER_ENABLED=true`
+already set by the chart.
+
+**The trap that made this dangerous:** 0.41.0 renamed every exporter the overlay re-lists
+verbatim — `otlp/jaeger` → `otlp_grpc/jaeger`, `spanmetrics` → `span_metrics`,
+`otlphttp/prometheus` → `otlp_http/prometheus`. Applying the old overlay would have
+produced a collector config referencing exporters that do not exist, the collector would
+have refused to start, and **all demo telemetry would have stopped**. The overlay now pins
+the chart version and says why at the top.
+
+Also: `agent`, `chatbot` and `mcp` (the new LLM services) are disabled — `agent` needs an
+`OPENAI_API_KEY` we do not hold, and three crash-looping pods on nodes already at 56-64%
+memory is not "realistic demo errors".
+
+Sequence used: rewrite overlay → `helm template` and grep the rendered collector config
+and image tags → save rollback values → `helm upgrade --version 0.41.0 --reset-values`.
+
+**Result:** converged in 80 seconds, 32/32 pods Running, no collector config errors,
+telemetry uninterrupted (900–1500 events per 5s bin immediately after), new services
+`astronomy-db` and `opamp-server` reporting, dead `llm` / `product-reviews` gone.
+Rollback: `helm rollback otel-demo 18`, values saved at
+`monoscope-k8s/rollback/otel-demo-values-rev18-chart0.40.7.yaml`.
+
+### Image pipeline — BUILT
+
+`.github/workflows/monoscope-build-images.yml`: manual dispatch, explicit service list,
+defaults to `frontend,load-generator`, pushes `ghcr.io/monoscope-tech/demo:<sha>-<service>`,
+amd64 only, gha layer cache per service. Upstream's own workflow is fork-guarded and
+builds all ~20 services, so it is neither usable nor wanted here.
+
+Image tags and the browser RUM key go in `monoscope-k8s/otel-demo-images.yaml` —
+**gitignored**, with `otel-demo-images.example.yaml` committed as the template. Applied as
+a second `-f` alongside the overlay; `--reset-values` clears values from *previous*
+releases, not ones passed in the same command.
+
+### Still open
+
 - [ ] Stamp the git sha into `service.version` / `vcs.repository.ref.revision` at build
-      time so §9's source links resolve against the commit that actually threw.
-- [ ] Decide whether to first upgrade the installed chart to the 3.0.0 line (removing the
-      dead `llm`/`product-reviews` pods) or pin the overlay to the chart already installed.
-      Upgrading is cleaner but is a bigger blast radius on a live demo — do it *after* the
-      quick wins below, not before.
+      time so §9's source links resolve against the commit that actually threw. Until
+      then the code mappings pin an explicit ref.
+- [ ] Re-sync `values-agent.yaml`'s hardcoded `filelog.exclude` list — it still names
+      `llm` and `product-reviews`, which no longer exist, and does not name the services
+      3.0.0 added. Per its own in-file note, a service that starts emitting OTLP logs and
+      is not excluded gets its logs counted twice.
+- [ ] Watch event volume: k6 at `LOAD_GENERATOR_VUS=5` versus the old Locust rate is an
+      unknown, and the demo project has a live Stripe subscription (§3.7). Baseline
+      before the upgrade was **87.9k events/hr**.
 
 ### Revised sequencing — quick wins first
 
