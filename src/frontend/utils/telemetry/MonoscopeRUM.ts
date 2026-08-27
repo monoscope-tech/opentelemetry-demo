@@ -131,12 +131,14 @@ export async function initMonoscope(): Promise<unknown> {
  * The tenant the demo reports as.
  *
  * Stamped by SessionIdProcessor onto the demo's own browser spans rather than
- * handed to the SDK, because **the published
- * `@monoscopetech/browser@0.11.6` has no tenant support at all**: neither a
- * `tenant` config option nor a `setTenant()` method exists in its typings or
- * its runtime bundle. Both exist in the monoscope-web source, so the npm
- * release is simply behind — once a version ships with them, move this to
- * `setTenant(DEMO_TENANT)` and drop the attributes from the span processor.
+ * handed to the SDK. That was originally a workaround — `@monoscopetech/browser@0.11.6`
+ * had no tenant support at all, neither a `tenant` config option nor a `setTenant()`
+ * method, though both existed in the monoscope-web source.
+ *
+ * **0.12.0 ships both**, so the workaround is no longer needed: this can move to
+ * `setTenant(DEMO_TENANT)` with the attributes dropped from the span processor. Left
+ * as-is for now only because it works and a frontend rebuild is the riskiest deploy in
+ * this repo — do it alongside the next frontend change rather than on its own.
  *
  * The demo has no real tenancy; one stable tenant keeps the facet populated
  * and filterable without inventing customers that do not exist. Note tenant.*
