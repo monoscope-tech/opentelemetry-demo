@@ -55,6 +55,28 @@ components:
       - name: OTEL_RESOURCE_ATTRIBUTES_EXTRA
         value: service.criticality=low,vcs.repository.ref.revision=REPLACE_WITH_GIT_SHA
 
+  # payment, built from this fork for the gRPC payload capture in src/payment/monoscope.js.
+  # No native SDK covers it — every Monoscope SDK is an HTTP middleware — so it reproduces
+  # the span contract by hand.
+  payment:
+    imageOverride:
+      repository: ghcr.io/monoscope-tech/demo
+      tag: REPLACE_WITH_GIT_SHA-payment
+    envOverrides:
+      - name: OTEL_RESOURCE_ATTRIBUTES_EXTRA
+        value: service.criticality=critical,vcs.repository.ref.revision=REPLACE_WITH_GIT_SHA
+
+  # quote, built from this fork for the Monoscope Slim SDK and the SIGTERM drain. Without
+  # the drain, every quote rollout blackholes in-flight requests until shipping's 5s
+  # deadline — see MONOSCOPE-DEMO-PLAN.md, "What the timeouts actually were".
+  quote:
+    imageOverride:
+      repository: ghcr.io/monoscope-tech/demo
+      tag: REPLACE_WITH_GIT_SHA-quote
+    envOverrides:
+      - name: OTEL_RESOURCE_ATTRIBUTES_EXTRA
+        value: service.criticality=low,vcs.repository.ref.revision=REPLACE_WITH_GIT_SHA
+
 # vcs.repository.ref.revision is what makes code mappings resolve against the commit
 # that is actually deployed instead of the ref pinned on the mapping row. Monoscope's
 # `revisionFor` tries service.version, then this key, then git.commit.sha, and accepts
