@@ -1,0 +1,25 @@
+constants: null
+description: null
+discovery_metrics: null
+file: null
+icon: null
+preview: null
+refresh_interval: null
+tabs: null
+tags: []
+teams: []
+time_range: null
+title: E2E Add Target 1787938232738
+variables: null
+widgets:
+- _project_id: 00000000-0000-0000-0000-000000000000
+  allow_zoom: true
+  id: 3d9479e3-60d2-4512-8829-a662c0ee83b1
+  layout:
+    h: 4
+    w: 6
+    x: null
+    'y': null
+  png_url: http://localhost:8080/p/00000000-0000-0000-0000-000000000000/widget.png?widgetZ=H4sIAAAAAAAAE22NwQrCMBBE_2XOKXgQD_kQryG0i65sk5JsrG3pvxu1FQ_OYRnesDMLdBoIFso9ZUpMGQbcVXLnXLzw7JVjaEbuLqQ1U1Z5PZx_48rFT7Eo7IIHbCgiBtNuRtiTwRX2uBq4IcUbtereK4dNzZ-zq7a7loJSctu6pkIGWX3ovMTwJV4kjm6Osf-Q9Qk72JZ24AAAAA==&sig=4f05a76a38f4659aa7c9aa84b795deedec9b509cd0c6970f4f4cf8af45376c89
+  title: Visualization
+  type: timeseries
