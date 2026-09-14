@@ -1,0 +1,26 @@
+constants: null
+description: null
+discovery_metrics: null
+file: null
+icon: null
+preview: null
+refresh_interval: null
+tabs: null
+tags: []
+teams: []
+time_range: null
+title: Blabla
+variables: null
+widgets:
+- _dashboard_id: a0e1261e-c3ad-45c0-9dbb-f7fd2e957e8a
+  _project_id: 00000000-0000-0000-0000-000000000000
+  hide_subtitle: true
+  id: 8b5f4679-7fc2-426a-b311-5a9309637a6e
+  layout:
+    h: 5
+    w: 5
+    x: 0
+    'y': 0
+  title: New Widget
+  type: timeseries
+  unit: ms
