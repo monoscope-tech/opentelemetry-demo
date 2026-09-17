@@ -1,0 +1,527 @@
+constants: null
+description: Browser experience, Core Web Vitals, frontend errors, and user sessions
+  from OpenTelemetry
+discovery_metrics: null
+file: rum.yaml
+icon: web
+preview: /public/assets/svgs/screens/http-stats.svg
+refresh_interval: 60s
+tabs:
+- icon: web
+  name: Overview
+  requires: null
+  widgets:
+  - children:
+    - icon: users
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      query: |
+        resource.telemetry.sdk.language == "webjs" and attributes.session.id != null and ("{{var-app}}" == "" or resource.service.name == "{{var-app}}")
+        | summarize started_at=min(timestamp) by attributes.session.id
+        | summarize count() by bin_auto(started_at)
+      summarize_by: sum
+      title: Sessions
+      type: timeseries_stat
+      unit: sessions
+    - icon: file-lines
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      query: |
+        resource.telemetry.sdk.language == "webjs" and name startswith "Pageview · " and ("{{var-app}}" == "" or resource.service.name == "{{var-app}}")
+        | summarize count() by bin_auto(timestamp)
+      summarize_by: sum
+      title: Page views
+      type: timeseries_stat
+      unit: views
+    - icon: triangle-exclamation
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      query: |
+        resource.telemetry.sdk.language == "webjs" and (status_code == "ERROR" or attributes.exception.type != null) and ("{{var-app}}" == "" or resource.service.name == "{{var-app}}")
+        | summarize count()
+      title: Browser errors
+      type: stat
+      unit: errors
+    - icon: gauge
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      query: |
+        resource.telemetry.sdk.language == "webjs" and name startswith "Pageview · " and duration != null and ("{{var-app}}" == "" or resource.service.name == "{{var-app}}")
+        | summarize p75(duration) / 1000000
+      title: P75 page load
+      type: stat
+      unit: ms
+    description: Real browser traffic only. Backend spans and synthetic requests are
+      excluded.
+    layout:
+      h: 4
+      w: 12
+      x: null
+      'y': null
+    title: User experience
+    type: group
+  - description: Frontend traffic with errors as a separate series.
+    layout:
+      h: 5
+      w: 7
+      x: null
+      'y': null
+    sql: |
+      SELECT extract(epoch from time_bucket('{{rollup_interval}}', timestamp))::integer AS time,
+        CASE WHEN status_code = 'ERROR' OR attributes___exception___type IS NOT NULL THEN 'Errors' ELSE 'Page views' END AS series,
+        COUNT(*)::float AS value
+      FROM otel_logs_and_spans
+      WHERE project_id='{{project_id}}'
+        AND resource___telemetry___sdk___language IN ('webjs', 'javascript', 'js')
+        AND (name LIKE 'Pageview · %' OR status_code = 'ERROR' OR attributes___exception___type IS NOT NULL)
+        AND ('{{var-app}}' = '' OR resource___service___name = '{{var-app}}')
+        {{time_filter}}
+      GROUP BY time, series ORDER BY time DESC
+    title: Page views and errors
+    type: timeseries
+  - columns:
+    - align: null
+      clickable: null
+      column_type: null
+      field: page
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: null
+      title: Page
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: views
+      link: null
+      progress: column_percent
+      progress_variant: null
+      sortable: null
+      title: Views
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: p75_ms
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: null
+      title: P75
+      unit: ms
+      width: null
+    description: Most-viewed routes and their P75 real-user load duration.
+    layout:
+      h: 5
+      w: 5
+      x: null
+      'y': null
+    sql: |
+      SELECT COALESCE(NULLIF(attributes___url___path, ''), replace(name, 'Pageview · ', '')) AS page,
+        COUNT(*)::text AS views,
+        ROUND((approx_percentile(0.75, percentile_agg(duration)) / 1000000.0)::numeric, 1)::text AS p75_ms
+      FROM otel_logs_and_spans
+      WHERE project_id='{{project_id}}'
+        AND resource___telemetry___sdk___language IN ('webjs', 'javascript', 'js')
+        AND name LIKE 'Pageview · %' AND duration IS NOT NULL
+        AND ('{{var-app}}' = '' OR resource___service___name = '{{var-app}}')
+        {{time_filter}}
+      GROUP BY page ORDER BY COUNT(*) DESC LIMIT 20
+    title: Top pages
+    type: table
+  - columns:
+    - align: null
+      clickable: null
+      column_type: null
+      field: user_or_session
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: null
+      title: User / session
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: last_page
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: null
+      title: Last page
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: page_views
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: null
+      title: Views
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: errors
+      link: null
+      progress: column_percent
+      progress_variant: error
+      sortable: null
+      title: Errors
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: last_seen
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: null
+      title: Last seen
+      unit: null
+      width: null
+    description: Open the RUM Sessions page for correlated replay and telemetry.
+    layout:
+      h: 6
+      w: 12
+      x: null
+      'y': null
+    sql: |
+      SELECT COALESCE(MAX(attributes___user___full_name), MAX(attributes___user___email), MAX(attributes___user___id), attributes___session___id) AS user_or_session,
+        COALESCE(MAX(attributes___url___path), 'Unknown page') AS last_page,
+        COUNT(*) FILTER (WHERE name LIKE 'Pageview · %')::text AS page_views,
+        COUNT(*) FILTER (WHERE status_code = 'ERROR' OR attributes___exception___type IS NOT NULL)::text AS errors,
+        MAX(timestamp)::text AS last_seen
+      FROM otel_logs_and_spans
+      WHERE project_id='{{project_id}}'
+        AND resource___telemetry___sdk___language IN ('webjs', 'javascript', 'js')
+        AND attributes___session___id IS NOT NULL
+        AND ('{{var-app}}' = '' OR resource___service___name = '{{var-app}}')
+        {{time_filter}}
+      GROUP BY attributes___session___id ORDER BY MAX(timestamp) DESC LIMIT 50
+    title: Recent sessions
+    type: table
+  - _dashboard_id: 937d95ae-7c44-4199-9674-86e3c4262869
+    _project_id: 00000000-0000-0000-0000-000000000000
+    hide_subtitle: true
+    id: ce92a866-699c-44f5-8fa1-4082b26eb9b8
+    layout:
+      h: 3
+      w: 3
+      x: null
+      'y': null
+    title: New Widget
+    type: timeseries
+    unit: ms
+- icon: gauge
+  name: Web Vitals
+  requires: null
+  widgets:
+  - children:
+    - icon: clock
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      sql: |
+        WITH latest AS (
+          SELECT COALESCE(value, distribution_sum / NULLIF(distribution_count, 0)) AS value,
+            row_number() OVER (PARTITION BY series_id ORDER BY timestamp DESC) AS rn
+          FROM otel_metrics WHERE project_id='{{project_id}}' AND metric_name='browser.web_vital.lcp'
+            AND ('{{var-app}}' = '' OR resource___service___name = '{{var-app}}') {{time_filter}}
+        ) SELECT approx_percentile(0.75, percentile_agg(value))::float FROM latest WHERE rn=1 AND value IS NOT NULL
+      title: LCP
+      type: stat
+      unit: ms
+    - icon: arrow-pointer
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      sql: |
+        WITH latest AS (
+          SELECT COALESCE(value, distribution_sum / NULLIF(distribution_count, 0)) AS value,
+            row_number() OVER (PARTITION BY series_id ORDER BY timestamp DESC) AS rn
+          FROM otel_metrics WHERE project_id='{{project_id}}' AND metric_name='browser.web_vital.inp'
+            AND ('{{var-app}}' = '' OR resource___service___name = '{{var-app}}') {{time_filter}}
+        ) SELECT approx_percentile(0.75, percentile_agg(value))::float FROM latest WHERE rn=1 AND value IS NOT NULL
+      title: INP
+      type: stat
+      unit: ms
+    - icon: arrows-up-down
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      sql: |
+        WITH latest AS (
+          SELECT COALESCE(value, distribution_sum / NULLIF(distribution_count, 0)) AS value,
+            row_number() OVER (PARTITION BY series_id ORDER BY timestamp DESC) AS rn
+          FROM otel_metrics WHERE project_id='{{project_id}}' AND metric_name='browser.web_vital.cls'
+            AND ('{{var-app}}' = '' OR resource___service___name = '{{var-app}}') {{time_filter}}
+        ) SELECT approx_percentile(0.75, percentile_agg(value))::float FROM latest WHERE rn=1 AND value IS NOT NULL
+      title: CLS
+      type: stat
+      unit: score
+    - icon: server
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      sql: |
+        WITH latest AS (
+          SELECT COALESCE(value, distribution_sum / NULLIF(distribution_count, 0)) AS value,
+            row_number() OVER (PARTITION BY series_id ORDER BY timestamp DESC) AS rn
+          FROM otel_metrics WHERE project_id='{{project_id}}' AND metric_name='browser.web_vital.ttfb'
+            AND ('{{var-app}}' = '' OR resource___service___name = '{{var-app}}') {{time_filter}}
+        ) SELECT approx_percentile(0.75, percentile_agg(value))::float FROM latest WHERE rn=1 AND value IS NOT NULL
+      title: TTFB
+      type: stat
+      unit: ms
+    description: Browser SDK histograms. LCP, INP, FCP, and TTFB are milliseconds;
+      CLS is dimensionless.
+    layout:
+      h: 4
+      w: 12
+      x: null
+      'y': null
+    title: Core Web Vitals
+    type: group
+  - description: Mean value per export interval. Use the RUM Performance page for
+      threshold assessments.
+    layout:
+      h: 5
+      w: 12
+      x: null
+      'y': null
+    sql: |
+      SELECT extract(epoch from time_bucket('{{rollup_interval}}', timestamp))::integer AS time,
+        upper(replace(metric_name, 'browser.web_vital.', '')) AS vital,
+        AVG(COALESCE(value, distribution_sum / NULLIF(distribution_count, 0)))::float AS value
+      FROM otel_metrics
+      WHERE project_id='{{project_id}}'
+        AND metric_name LIKE 'browser.web_vital.%'
+        AND ('{{var-app}}' = '' OR resource___service___name = '{{var-app}}')
+        {{time_filter}}
+      GROUP BY time, vital ORDER BY time DESC
+    title: Web Vitals over time
+    type: timeseries_line
+  - columns:
+    - align: null
+      clickable: null
+      column_type: null
+      field: vital
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: null
+      title: Vital
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: samples
+      link: null
+      progress: column_percent
+      progress_variant: null
+      sortable: null
+      title: Samples
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: last_seen
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: null
+      title: Last seen
+      unit: null
+      width: null
+    description: Confirm which field metrics the browser SDK is reporting.
+    layout:
+      h: 4
+      w: 12
+      x: null
+      'y': null
+    sql: |
+      SELECT upper(replace(metric_name, 'browser.web_vital.', '')) AS vital,
+        SUM(COALESCE(distribution_count, 1))::text AS samples,
+        MAX(timestamp)::text AS last_seen
+      FROM otel_metrics
+      WHERE project_id='{{project_id}}' AND metric_name LIKE 'browser.web_vital.%'
+        AND ('{{var-app}}' = '' OR resource___service___name = '{{var-app}}') {{time_filter}}
+      GROUP BY metric_name ORDER BY metric_name
+    title: Vital sample coverage
+    type: table
+- icon: triangle-exclamation
+  name: Errors
+  requires: null
+  widgets:
+  - description: Exceptions and spans marked ERROR by the browser SDK.
+    icon: triangle-exclamation
+    layout:
+      h: 3
+      w: 4
+      x: null
+      'y': null
+    query: |
+      resource.telemetry.sdk.language == "webjs" and (status_code == "ERROR" or attributes.exception.type != null) and ("{{var-app}}" == "" or resource.service.name == "{{var-app}}")
+      | summarize count() by bin_auto(timestamp)
+    summarize_by: sum
+    title: Browser error volume
+    type: timeseries_stat
+    unit: errors
+  - icon: users
+    layout:
+      h: 3
+      w: 4
+      x: null
+      'y': null
+    query: |
+      resource.telemetry.sdk.language == "webjs" and attributes.session.id != null and (status_code == "ERROR" or attributes.exception.type != null) and ("{{var-app}}" == "" or resource.service.name == "{{var-app}}")
+      | summarize dcount(attributes.session.id)
+    title: Affected sessions
+    type: stat
+    unit: sessions
+  - icon: user
+    layout:
+      h: 3
+      w: 4
+      x: null
+      'y': null
+    query: |
+      resource.telemetry.sdk.language == "webjs" and attributes.user.id != null and (status_code == "ERROR" or attributes.exception.type != null) and ("{{var-app}}" == "" or resource.service.name == "{{var-app}}")
+      | summarize dcount(attributes.user.id)
+    title: Affected users
+    type: stat
+    unit: users
+  - columns:
+    - align: null
+      clickable: null
+      column_type: null
+      field: error_type
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: null
+      title: Type
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: message
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: null
+      title: Message
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: events
+      link: null
+      progress: column_percent
+      progress_variant: error
+      sortable: null
+      title: Events
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: sessions
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: null
+      title: Sessions
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: last_seen
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: null
+      title: Last seen
+      unit: null
+      width: null
+    description: Highest-impact frontend failures, grouped by exception type and message.
+    layout:
+      h: 7
+      w: 12
+      x: null
+      'y': null
+    sql: |
+      SELECT COALESCE(attributes___exception___type, status_message, 'Browser error') AS error_type,
+        LEFT(COALESCE(attributes___exception___message, status_message, name, 'No error message'), 300) AS message,
+        COUNT(*)::text AS events,
+        COUNT(DISTINCT attributes___session___id)::text AS sessions,
+        MAX(timestamp)::text AS last_seen
+      FROM otel_logs_and_spans
+      WHERE project_id='{{project_id}}'
+        AND resource___telemetry___sdk___language IN ('webjs', 'javascript', 'js')
+        AND (status_code='ERROR' OR attributes___exception___type IS NOT NULL)
+        AND ('{{var-app}}' = '' OR resource___service___name = '{{var-app}}')
+        {{time_filter}}
+      GROUP BY error_type, message ORDER BY COUNT(*) DESC LIMIT 50
+    title: Browser error types
+    type: table
+tags:
+- rum
+- browser
+- frontend
+- web-vitals
+teams: []
+time_range: null
+title: Real User Monitoring
+variables:
+- facet_field: service.name
+  key: app
+  multi: false
+  reload_on_change: true
+  sql:
+    source: timefusion
+    statement: |
+      SELECT DISTINCT resource___service___name
+      FROM otel_logs_and_spans
+      WHERE project_id='{{project_id}}'
+        AND resource___telemetry___sdk___language IN ('webjs', 'javascript', 'js')
+        AND resource___service___name IS NOT NULL
+        {{time_filter}}
+      LIMIT 100
+  title: Application
+  type: query
+widgets: []
