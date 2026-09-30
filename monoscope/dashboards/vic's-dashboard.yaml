@@ -1,0 +1,1861 @@
+constants:
+- description: Top 20 resources by request count for the current time range
+  key: top_resources
+  query: null
+  result: null
+  sql:
+    source: timefusion
+    statement: |
+      SELECT name
+      FROM otel_logs_and_spans
+      WHERE project_id='{{project_id}}'
+        AND name IS NOT NULL
+        AND kind = 'server'
+        AND ('{{var-resource}}' = '' OR name = '{{var-resource}}')
+        {{time_filter}}
+      GROUP BY name
+      ORDER BY COUNT(*) DESC
+      LIMIT 20
+description: Comprehensive system overview with service, resource, and database insights
+discovery_metrics: null
+file: _overview.yaml
+icon: qrcode
+preview: /public/assets/svgs/screens/http-stats.svg
+refresh_interval: 60s
+tabs:
+- icon: grid
+  name: Overview
+  requires: null
+  widgets:
+  - children:
+    - description: Request rate across inbound requests AND SDK-instrumented outbound
+        calls. Measures system load and usage patterns.
+      icon: activity
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      query: |
+        (kind == "server" or name == "apitoolkit-http-span" or name == "monoscope.http")
+        | summarize count() by bin_auto(timestamp)
+      summarize_by: rate
+      title: Traffic
+      type: timeseries_stat
+      unit: req/min
+    - description: 95th percentile response time across inbound requests AND SDK-instrumented
+        outbound calls. 95% complete faster than this.
+      icon: clock
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      query: |
+        (kind == "server" or name == "apitoolkit-http-span" or name == "monoscope.http") and duration != null
+        | summarize p95(duration) / 1000000 by bin_auto(timestamp)
+      summarize_by: mean
+      title: P95 Latency
+      type: timeseries_stat
+      unit: ms
+    - alert_threshold: 5
+      description: Percentage of failed requests (5xx errors) across inbound requests
+        AND SDK-instrumented outbound calls. A failing third-party dependency raises
+        this. Lower is better.
+      icon: alert-triangle
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      query: |
+        (kind == "server" or name == "apitoolkit-http-span" or name == "monoscope.http")
+        | summarize round(countif(status_code == "ERROR" or coalesce(attributes.http.response.status_code, 0) >= 500) * 100.0 / count(), 2) by bin_auto(timestamp)
+      summarize_by: mean
+      title: Error Rate
+      type: timeseries_stat
+      unit: '%'
+    - description: Application Performance Index (0-1). Measures user satisfaction
+        based on response times. >0.9 is excellent, <0.5 is poor.
+      icon: smile
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      sql: SELECT ROUND((SUM(CASE WHEN duration <= 500000000 THEN 1.0 WHEN duration
+        <= 2000000000 THEN 0.5 ELSE 0 END)) / GREATEST(1, COUNT(*))::numeric, 2)::float
+        FROM otel_logs_and_spans WHERE project_id='{{project_id}}' AND (kind = 'server'
+        OR name = 'apitoolkit-http-span' OR name = 'monoscope.http') AND duration
+        IS NOT NULL {{time_filter}}
+      title: Apdex Score
+      type: stat
+      unit: /1.0
+    description: 'The four key metrics from Google SRE for monitoring distributed
+      systems: Traffic, Latency, Errors, and Saturation.'
+    layout:
+      h: 4
+      w: 12
+      x: null
+      'y': null
+    title: Golden Signals
+    type: group
+  - children:
+    - icon: server
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      query: |
+        resource.service.name != null
+        | summarize dcount(resource.service.name)
+      title: Active Services
+      type: stat
+      unit: services
+    - icon: list-tree
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      query: |
+        (kind == "server" or name == "apitoolkit-http-span" or name == "monoscope.http")
+        | summarize count()
+      title: Total Requests
+      type: stat
+      unit: reqs
+    - icon: database
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      query: |
+        attributes.db.system.name != null
+        | summarize dcount(attributes.db.system.name)
+      title: DB Systems
+      type: stat
+      unit: systems
+    - icon: route
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      query: |
+        (kind == "server" or name == "apitoolkit-http-span") and name != null
+        | summarize dcount(name)
+      title: Unique Endpoints
+      type: stat
+      unit: endpoints
+    layout:
+      h: 2
+      w: 12
+      x: null
+      'y': null
+    title: System Overview
+    type: group
+  - columns:
+    - align: null
+      clickable: null
+      column_type: null
+      field: service_name
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Service
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: apdex
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Apdex
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: throughput
+      link: null
+      progress: column_percent
+      progress_variant: null
+      sortable: true
+      title: Throughput
+      unit: req/min
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: error_rate
+      link: null
+      progress: value_percent
+      progress_variant: error
+      sortable: true
+      title: Errors
+      unit: '%'
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: p95_latency
+      link: null
+      progress: column_percent
+      progress_variant: null
+      sortable: true
+      title: P95
+      unit: ms
+      width: null
+    default_sort: COUNT(*)::numeric / GREATEST(1, EXTRACT(EPOCH FROM (MAX(timestamp)
+      - MIN(timestamp))) / 60) DESC
+    description: Click a service row to view its detailed metrics in the Service tab.
+    layout:
+      h: 6
+      w: 6
+      x: null
+      'y': null
+    on_row_click:
+      navigate_to_tab: Service
+      set_variable: service
+      value: '{{row.service_name}}'
+    sql: |
+      SELECT resource___service___name as service_name, ROUND((SUM(CASE WHEN duration <= 500000000 THEN 1.0 WHEN duration <= 2000000000 THEN 0.5 ELSE 0 END)) / GREATEST(1, COUNT(*))::numeric, 2) as apdex, ROUND((COUNT(*)::numeric / GREATEST(1, EXTRACT(EPOCH FROM (MAX(timestamp) - MIN(timestamp))) / 60)), 2) as throughput, ROUND((COUNT(*) FILTER (WHERE status_code = 'ERROR' OR COALESCE(attributes___http___response___status_code, 0) >= 500) * 100.0 / GREATEST(1, COUNT(*))::numeric), 2) as error_rate, ROUND((approx_percentile(0.95, percentile_agg(duration))::numeric / 1000000), 2) as p95_latency FROM otel_logs_and_spans WHERE project_id='{{project_id}}' AND resource___service___name IS NOT NULL AND kind = 'server' AND duration IS NOT NULL {{time_filter}} GROUP BY resource___service___name ORDER BY {{table_sort}} LIMIT 50
+    title: Services Health
+    type: table
+  - layout:
+      h: 6
+      w: 6
+      x: null
+      'y': null
+    title: Ongoing Issues
+    type: anomalies
+  - layout:
+      h: 4
+      w: 6
+      x: null
+      'y': null
+    query: |
+      resource.service.name != null
+      | summarize count() by bin_auto(timestamp), resource.service.name
+      | order by timestamp desc
+      | limit 10000
+    title: Events by Service
+    type: timeseries
+    unit: events
+  - layout:
+      h: 4
+      w: 6
+      x: null
+      'y': null
+    query: |
+      status_code == "ERROR" and resource.service.name != null
+      | summarize count() by bin_auto(timestamp), resource.service.name
+      | order by timestamp desc
+      | limit 10000
+    theme: roma
+    title: Error Rates by Service
+    type: timeseries
+    unit: errors
+  - layout:
+      h: 4
+      w: 6
+      x: null
+      'y': null
+    query: |
+      resource.service.name != null and kind == "server"
+      | summarize count() by bin_auto(timestamp), resource.service.name
+      | order by timestamp desc
+      | limit 10000
+    title: HTTP Request Volume by Service
+    type: timeseries
+    unit: reqs
+  - layout:
+      h: 4
+      w: 6
+      x: null
+      'y': null
+    query: |
+      (kind == "server" or name == "apitoolkit-http-span" or name == "monoscope.http") and attributes.http.response.status_code != null
+      | summarize count() by bin_auto(timestamp), coalesce(tostring(attributes.http.response.status_code), "unknown")
+      | order by timestamp desc
+      | limit 10000
+    title: HTTP Requests by Status Code
+    type: timeseries
+    unit: reqs
+  - layout:
+      h: 4
+      w: 6
+      x: null
+      'y': null
+    query: |
+      (kind == "server" or name == "apitoolkit-http-span" or name == "monoscope.http") and attributes.http.response.status_code != null and attributes.http.response.status_code >= 400
+      | extend error_category = case(attributes.http.response.status_code >= 500, "5xx", attributes.http.response.status_code >= 400, "4xx", tostring(attributes.http.response.status_code))
+      | summarize count() by bin_auto(timestamp), error_category
+      | order by timestamp desc
+      | limit 10000
+    theme: roma
+    title: HTTP Errors (4xx & 5xx) - Incoming
+    type: timeseries
+    unit: errors
+  - description: Response time distribution. P50 is median, P99 shows worst-case latency
+      for 1% of requests.
+    hide_subtitle: true
+    layout:
+      h: 4
+      w: 6
+      x: null
+      'y': null
+    query: |
+      (kind == "server" or name == "apitoolkit-http-span" or name == "monoscope.http") and duration != null
+      | summarize percentiles(duration, 50, 75, 90, 95, 99) by bin_auto(timestamp)
+      | order by timestamp desc
+    summarize_by: max
+    title: Request Latency Percentiles
+    type: timeseries_line
+    unit: ns
+  - columns:
+    - align: null
+      clickable: null
+      column_type: null
+      field: db_system
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Database
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: queries
+      link: null
+      progress: column_percent
+      progress_variant: null
+      sortable: true
+      title: Queries
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: avg_ms
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Avg
+      unit: ms
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: error_rate
+      link: null
+      progress: value_percent
+      progress_variant: error
+      sortable: true
+      title: Errors
+      unit: '%'
+      width: null
+    default_sort: COUNT(*) DESC
+    description: Click a database to view detailed metrics in the Databases tab.
+    layout:
+      h: 4
+      w: 6
+      x: null
+      'y': null
+    on_row_click:
+      navigate_to_tab: Databases
+      set_variable: database
+      value: '{{row.db_system}}'
+    sql: |
+      SELECT
+        attributes___db___system___name as db_system,
+        COUNT(*) as queries,
+        ROUND((AVG(duration) / 1e6)::numeric, 2) as avg_ms,
+        ROUND((COUNT(*) FILTER (WHERE status_code = 'ERROR') * 100.0 / GREATEST(1, COUNT(*)))::numeric, 2) as error_rate
+      FROM otel_logs_and_spans
+      WHERE project_id='{{project_id}}'
+        AND attributes___db___system___name IS NOT NULL
+        AND duration IS NOT NULL
+        {{time_filter}}
+      GROUP BY db_system
+      ORDER BY {{table_sort}}
+    title: Database Health
+    type: table
+  - layout:
+      h: 4
+      w: 12
+      x: null
+      'y': null
+    sql: "WITH top_endpoints AS (\n  SELECT \n    attributes___http___request___method
+      || ' ' || attributes___url___path as endpoint,\n    COUNT(*) as total_count\n
+      \ FROM otel_logs_and_spans\n  WHERE project_id='{{project_id}}'\n    AND (kind
+      = 'server' OR name = 'apitoolkit-http-span' OR name = 'monoscope.http')\n    AND
+      attributes___http___response___status_code IS NOT NULL\n    AND attributes___url___path
+      IS NOT NULL\n    {{time_filter}}\n  GROUP BY endpoint\n  ORDER BY total_count
+      DESC\n  LIMIT 10\n)\nSELECT \n  extract(epoch from time_bucket('{{rollup_interval}}',
+      o.timestamp))::integer AS time,\n  o.attributes___http___request___method ||
+      ' ' || o.attributes___url___path as endpoint,\n  COUNT(*)::float as count\nFROM
+      otel_logs_and_spans o\nINNER JOIN top_endpoints t ON (o.attributes___http___request___method
+      || ' ' || o.attributes___url___path) = t.endpoint\nWHERE o.project_id='{{project_id}}'\n
+      \ AND (o.kind = 'server' OR o.name = 'apitoolkit-http-span' OR o.name = 'monoscope.http')\n
+      \ {{time_filter}}\nGROUP BY time, o.attributes___http___request___method, o.attributes___url___path\nORDER
+      BY time DESC\n"
+    title: Requests by Endpoint
+    type: timeseries
+    unit: reqs
+  - _dashboard_id: 63c445fa-f250-4565-8ed0-8fb99e983d1d
+    _project_id: 00000000-0000-0000-0000-000000000000
+    hide_subtitle: true
+    id: 1b5f7962-bb8f-46d3-9e3f-f4f3c06c2781
+    layout:
+      h: 3
+      w: 3
+      x: null
+      'y': null
+    title: Vic's Widget
+    type: timeseries
+    unit: ms
+- icon: server
+  name: Service
+  requires: service
+  widgets:
+  - children:
+    - icon: list-tree
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      query: |
+        resource.service.name == "{{var-service}}" and kind == "server"
+        | summarize count() by bin_auto(timestamp)
+      title: Service Requests
+      type: timeseries_stat
+      unit: reqs
+    - icon: bug
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      query: |
+        resource.service.name == "{{var-service}}" and kind == "server"
+        | summarize round(countif(status_code == "ERROR" or coalesce(attributes.http.response.status_code, 0) >= 400) * 100.0 / count(), 2)
+      title: Service Error Rate
+      type: stat
+      unit: '%'
+    - icon: activity
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      query: |
+        resource.service.name == "{{var-service}}" and kind == "server" and duration != null
+        | summarize round(avg(duration) / 1000000, 2)
+      title: Avg Latency
+      type: stat
+      unit: ms
+    - icon: routes
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      query: |
+        resource.service.name == "{{var-service}}" and kind == "server" and name != null
+        | summarize dcount(name)
+      title: Endpoints
+      type: stat
+      unit: endpoints
+    layout:
+      h: 3
+      w: 12
+      x: null
+      'y': null
+    title: '{{var-service}} Health'
+    type: group
+  - layout:
+      h: 3
+      w: 4
+      x: null
+      'y': null
+    query: |
+      name != null and kind == "server" and resource.service.name == "{{var-service}}"
+      | summarize count() by bin_auto(timestamp), name
+      | order by timestamp desc
+      | limit 2000
+    title: Requests by Resource
+    type: timeseries
+    unit: reqs
+  - layout:
+      h: 3
+      w: 4
+      x: null
+      'y': null
+    query: |
+      name != null and kind == "server" and duration != null and resource.service.name == "{{var-service}}"
+      | summarize p95(duration) by bin_auto(timestamp), name
+      | order by timestamp desc
+      | limit 2000
+    title: P95 Latency by Resource
+    type: timeseries_line
+    unit: ns
+  - layout:
+      h: 3
+      w: 4
+      x: null
+      'y': null
+    query: |
+      name != null and kind == "server" and (status_code == "ERROR" or coalesce(attributes.http.response.status_code, 0) >= 400) and resource.service.name == "{{var-service}}"
+      | summarize count() by bin_auto(timestamp), name
+      | order by timestamp desc
+      | limit 2000
+    theme: roma
+    title: Errors by Resource
+    type: timeseries
+    unit: errors
+  - layout:
+      h: 4
+      w: 6
+      x: null
+      'y': null
+    query: |
+      resource.service.name == "{{var-service}}" and kind == "server"
+      | extend status_code_str = coalesce(tostring(attributes.http.response.status_code), "unknown")
+      | summarize count() by bin_auto(timestamp), status_code_str
+      | order by timestamp desc
+      | limit 10000
+    title: Requests by Status Code
+    type: timeseries
+    unit: reqs
+  - hide_subtitle: true
+    layout:
+      h: 4
+      w: 6
+      x: null
+      'y': null
+    query: |
+      resource.service.name == "{{var-service}}" and kind == "server" and duration != null
+      | summarize percentiles(duration, 50, 75, 90, 95, 99) by bin_auto(timestamp)
+      | order by timestamp desc
+    summarize_by: max
+    title: Latency Percentiles
+    type: timeseries_line
+    unit: ns
+  - layout:
+      h: 4
+      w: 6
+      x: null
+      'y': null
+    query: |
+      resource.service.name == "{{var-service}}" and kind == "server" and (status_code != "UNSET" and status_code != "OK" or coalesce(attributes.http.response.status_code, 0) >= 400)
+      | extend error_type = case(status_code == "ERROR", "ERROR", attributes.http.response.status_code >= 500, "5xx", attributes.http.response.status_code >= 400, "4xx", status_code)
+      | summarize count() by bin_auto(timestamp), error_type
+      | order by timestamp desc
+      | limit 10000
+    theme: roma
+    title: Errors
+    type: timeseries
+    unit: errors
+  - layout:
+      h: 4
+      w: 6
+      x: null
+      'y': null
+    sql: |
+      WITH service_spans AS (
+        SELECT
+          extract(epoch from time_bucket('{{rollup_interval}}', timestamp))::integer AS time,
+          context___span_id as span_id,
+          context___trace_id as trace_id
+        FROM otel_logs_and_spans
+        WHERE project_id='{{project_id}}'
+          AND resource___service___name = '{{var-service}}'
+          AND kind = 'server'
+          {{time_filter}}
+      ),
+      downstream_time AS (
+        SELECT
+          ss.time,
+          o.name as operation,
+          SUM(o.duration)::float as duration_ns
+        FROM otel_logs_and_spans o
+        INNER JOIN service_spans ss ON o.context___trace_id = ss.trace_id AND o.parent_id = ss.span_id
+        WHERE o.project_id='{{project_id}}'
+          AND o.duration IS NOT NULL
+          AND o.name IS NOT NULL
+          {{time_filter}}
+        GROUP BY ss.time, o.name
+      )
+      SELECT
+        time,
+        operation,
+        duration_ns as value
+      FROM downstream_time
+      ORDER BY time DESC
+      LIMIT 10000
+    title: Time Spent by Downstream Operations
+    type: timeseries
+    unit: ns
+  - columns:
+    - align: null
+      clickable: null
+      column_type: null
+      field: resource_name
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Resource Name
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: requests
+      link: null
+      progress: column_percent
+      progress_variant: null
+      sortable: true
+      title: Requests
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: total_time
+      link: null
+      progress: column_percent
+      progress_variant: null
+      sortable: true
+      title: Total Time
+      unit: s
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: p95_latency
+      link: null
+      progress: column_percent
+      progress_variant: null
+      sortable: true
+      title: P95 Latency
+      unit: ms
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: errors
+      link: null
+      progress: column_percent
+      progress_variant: error
+      sortable: true
+      title: Errors
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: error_rate
+      link: null
+      progress: value_percent
+      progress_variant: error
+      sortable: true
+      title: Error Rate (%)
+      unit: null
+      width: null
+    default_sort: COUNT(*) DESC
+    description: HTTP and gRPC entry points for this service. Click a row to filter
+      charts above.
+    layout:
+      h: 5
+      w: 12
+      x: null
+      'y': null
+    on_row_click:
+      navigate_to_tab: null
+      set_variable: resource
+      value: '{{row.resource_name}}'
+    sql: |
+      SELECT
+        name as resource_name,
+        COUNT(*) as requests,
+        ROUND((SUM(duration) / 1e9)::numeric, 2) as total_time,
+        ROUND((approx_percentile(0.95, percentile_agg(duration))::numeric / 1e6), 2) as p95_latency,
+        COUNT(*) FILTER (WHERE status_code = 'ERROR' OR COALESCE(attributes___http___response___status_code, 0) >= 400) as errors,
+        ROUND((COUNT(*) FILTER (WHERE status_code = 'ERROR' OR COALESCE(attributes___http___response___status_code, 0) >= 400) * 100.0 / GREATEST(1, COUNT(*)))::numeric, 2) as error_rate
+      FROM otel_logs_and_spans
+      WHERE project_id='{{project_id}}'
+        AND name IS NOT NULL
+        AND kind = 'server'
+        AND resource___service___name = '{{var-service}}'
+        {{time_filter}}
+      GROUP BY name
+      ORDER BY {{table_sort}}
+      LIMIT 100
+    title: Inbound Endpoints
+    type: table
+  - layout:
+      h: 4
+      w: 12
+      x: null
+      'y': null
+    sql: |
+      WITH operation_stats AS (
+        SELECT
+          name,
+          AVG(duration) as avg_duration_ns
+        FROM otel_logs_and_spans
+        WHERE project_id='{{project_id}}'
+          AND name IS NOT NULL
+          AND resource___service___name = '{{var-service}}'
+          AND kind = 'server'
+          AND duration IS NOT NULL
+          {{time_filter}}
+        GROUP BY name
+        ORDER BY avg_duration_ns DESC
+        LIMIT 10
+      )
+      SELECT
+        extract(epoch from time_bucket('{{rollup_interval}}', timestamp))::integer AS time,
+        o.name,
+        AVG(o.duration)::float as value
+      FROM otel_logs_and_spans o
+      INNER JOIN operation_stats s ON o.name = s.name
+      WHERE o.project_id='{{project_id}}'
+        AND o.resource___service___name = '{{var-service}}'
+        AND o.kind = 'server'
+        AND o.duration IS NOT NULL
+        {{time_filter}}
+      GROUP BY time, o.name
+      ORDER BY time DESC
+    title: Avg Latency by Endpoint
+    type: timeseries
+    unit: ns
+  - layout:
+      h: 5
+      w: 12
+      x: null
+      'y': null
+    query: (parent_id=="" or parent_id==null) and resource.service.name=="{{var-service}}"
+      and duration != null
+    title: Recent Traces
+    type: logs
+  - columns:
+    - align: null
+      clickable: null
+      column_type: null
+      field: resource_name
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Resource
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: span_name
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Span
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: avg_duration
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Avg Duration
+      unit: ms
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: span_count
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Trace Count
+      unit: null
+      width: null
+    default_sort: avg_duration DESC
+    layout:
+      h: 5
+      w: 12
+      x: null
+      'y': null
+    sql: |
+      SELECT
+        COALESCE(resource___service___name,'Unknown') AS resource_name,
+        name AS span_name,
+        ROUND(AVG(duration / 1000000.0), 2) AS avg_duration,
+        COUNT(*) AS span_count
+      FROM otel_logs_and_spans
+      WHERE project_id='{{project_id}}'
+        AND (parent_id = '' OR parent_id IS NULL)
+        AND name IS NOT NULL
+        AND duration IS NOT NULL
+        AND resource___service___name = '{{var-service}}'
+        {{time_filter}}
+      GROUP BY resource___service___name, name
+      ORDER BY {{table_sort}}
+      LIMIT 20
+    title: Root Operation Summary
+    type: table
+  - columns:
+    - align: null
+      clickable: null
+      column_type: null
+      field: operation_name
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Operation
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: count
+      link: null
+      progress: column_percent
+      progress_variant: null
+      sortable: true
+      title: Count
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: error_rate
+      link: null
+      progress: value_percent
+      progress_variant: error
+      sortable: true
+      title: Error Rate
+      unit: '%'
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: avg_duration
+      link: null
+      progress: column_percent
+      progress_variant: null
+      sortable: true
+      title: Avg Duration
+      unit: ms
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: p95_duration
+      link: null
+      progress: column_percent
+      progress_variant: null
+      sortable: true
+      title: P95 Duration
+      unit: ms
+      width: null
+    default_sort: COUNT(*) DESC
+    description: Every span this service produces — includes DB queries, downstream
+      calls, and internal operations.
+    layout:
+      h: 6
+      w: 12
+      x: null
+      'y': null
+    sql: |
+      SELECT
+        name as operation_name,
+        COUNT(*) as count,
+        ROUND((COUNT(*) FILTER (WHERE status_code = 'ERROR' OR COALESCE(attributes___http___response___status_code, 0) >= 400) * 100.0 / GREATEST(1, COUNT(*)))::numeric, 2) as error_rate,
+        ROUND((AVG(duration) / 1e6)::numeric, 2) as avg_duration,
+        ROUND((approx_percentile(0.95, percentile_agg(duration))::numeric / 1e6), 2) as p95_duration
+      FROM otel_logs_and_spans
+      WHERE project_id='{{project_id}}'
+        AND resource___service___name = '{{var-service}}'
+        AND name IS NOT NULL
+        AND duration IS NOT NULL
+        {{time_filter}}
+      GROUP BY name
+      ORDER BY {{table_sort}}
+      LIMIT 100
+    title: All Operations
+    type: table
+- icon: file-text
+  name: Logs
+  requires: null
+  widgets:
+  - children:
+    - icon: file-text
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      query: |
+        body != null and ("{{var-service}}" == "" or resource.service.name == "{{var-service}}")
+        | summarize count() by bin_auto(timestamp)
+      title: Total Logs
+      type: timeseries_stat
+      unit: logs
+    - alert_threshold: 100.0
+      icon: alert-triangle
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      query: |
+        level in ("ERROR", "FATAL") and ("{{var-service}}" == "" or resource.service.name == "{{var-service}}")
+        | summarize count() by bin_auto(timestamp)
+      title: Error Logs
+      type: timeseries_stat
+      unit: errors
+    - icon: alert-circle
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      query: |
+        level == "WARN" and ("{{var-service}}" == "" or resource.service.name == "{{var-service}}")
+        | summarize count() by bin_auto(timestamp)
+      title: Warning Logs
+      type: timeseries_stat
+      unit: warns
+    - icon: server
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      query: |
+        body != null and resource.service.name != null
+        | summarize dcount(resource.service.name)
+      title: Log Sources
+      type: stat
+      unit: services
+    layout:
+      h: 4
+      w: 12
+      x: null
+      'y': null
+    title: Log Metrics
+    type: group
+  - layout:
+      h: 4
+      w: 6
+      x: null
+      'y': null
+    query: |
+      level != null and ("{{var-service}}" == "" or resource.service.name == "{{var-service}}")
+      | summarize count() by bin_auto(timestamp), level
+      | order by timestamp desc
+      | limit 10000
+    title: Log Volume by Level
+    type: timeseries
+  - layout:
+      h: 4
+      w: 6
+      x: null
+      'y': null
+    sql: |
+      WITH service_stats AS (
+        SELECT resource___service___name, COUNT(*) as error_count
+        FROM otel_logs_and_spans
+        WHERE project_id='{{project_id}}' AND level IN ('ERROR', 'FATAL')
+          AND ('{{var-service}}' = '' OR resource___service___name = '{{var-service}}')
+          {{time_filter}}
+        GROUP BY resource___service___name
+        ORDER BY error_count DESC
+        LIMIT 10
+      )
+      SELECT
+        extract(epoch from time_bucket('{{rollup_interval}}', timestamp))::integer AS time,
+        o.resource___service___name as service_name,
+        COUNT(*)::float as count
+      FROM otel_logs_and_spans o
+      INNER JOIN service_stats s ON o.resource___service___name = s.resource___service___name
+      WHERE o.project_id='{{project_id}}' AND o.level IN ('ERROR', 'FATAL')
+        AND ('{{var-service}}' = '' OR o.resource___service___name = '{{var-service}}')
+        {{time_filter}}
+      GROUP BY time, service_name
+      ORDER BY time DESC
+    theme: roma
+    title: Error Logs by Service
+    type: timeseries
+  - layout:
+      h: 5
+      w: 12
+      x: null
+      'y': null
+    title: Error Patterns
+    type: anomalies
+  - layout:
+      h: 10
+      w: 12
+      x: null
+      'y': null
+    query: |
+      body != null
+    title: Log Stream
+    type: logs
+- icon: database
+  name: Databases
+  requires: database
+  widgets:
+  - children:
+    - icon: database
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      query: |
+        attributes.db.system.name == "{{var-database}}"
+        | summarize count() by bin_auto(timestamp)
+      title: Total Queries
+      type: timeseries_stat
+      unit: queries
+    - alert_threshold: 5
+      icon: alert-triangle
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      query: |
+        attributes.db.system.name == "{{var-database}}"
+        | summarize round(countif(status_code == "ERROR") * 100.0 / count(), 2) by bin_auto(timestamp)
+      summarize_by: mean
+      title: Query Error Rate
+      type: timeseries_stat
+      unit: '%'
+    - icon: clock
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      query: |
+        attributes.db.system.name == "{{var-database}}" and duration != null
+        | summarize p95(duration) / 1000000 by bin_auto(timestamp)
+      summarize_by: mean
+      title: P95 Query Time
+      type: timeseries_stat
+      unit: ms
+    - icon: turtle
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      sql: |
+        SELECT COALESCE(COUNT(*), 0)::float8
+        FROM otel_logs_and_spans
+        WHERE project_id='{{project_id}}'
+          AND attributes___db___system___name IS NOT NULL
+          AND duration > 50000000
+          AND attributes___db___system___name = '{{var-database}}'
+          {{time_filter}}
+      title: Slow Queries (>50ms)
+      type: stat
+      unit: queries
+    layout:
+      h: 4
+      w: 12
+      x: null
+      'y': null
+    title: '{{var-database}} Performance'
+    type: group
+  - columns:
+    - align: null
+      clickable: null
+      column_type: null
+      field: query_pattern
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Query Pattern
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: count
+      link: null
+      progress: column_percent
+      progress_variant: null
+      sortable: true
+      title: Count
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: avg_ms
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Avg
+      unit: ms
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: p95_ms
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: P95
+      unit: ms
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: total_time
+      link: null
+      progress: column_percent
+      progress_variant: null
+      sortable: true
+      title: Total Time
+      unit: s
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: error_rate
+      link: null
+      progress: value_percent
+      progress_variant: error
+      sortable: true
+      title: Errors
+      unit: '%'
+      width: null
+    default_sort: SUM(duration) DESC
+    description: Queries sorted by total time spent. Optimizing these yields the biggest
+      performance gains.
+    layout:
+      h: 7
+      w: 12
+      x: null
+      'y': null
+    sql: |
+      SELECT
+        LEFT(COALESCE(
+          NULLIF(attributes___db___query___summary, ''),
+          attributes___db___query___text,
+          CASE WHEN attributes___db___system___name = 'redis' THEN SPLIT_PART(name, ' ', 1)
+               ELSE name END
+        ), 2000) as query_pattern,
+        COUNT(*) as count,
+        ROUND((AVG(duration) / 1e6)::numeric, 2) as avg_ms,
+        ROUND((approx_percentile(0.95, percentile_agg(duration)) / 1e6)::numeric, 2) as p95_ms,
+        ROUND((SUM(duration) / 1e9)::numeric, 2) as total_time,
+        ROUND((COUNT(*) FILTER (WHERE status_code = 'ERROR') * 100.0 / GREATEST(1, COUNT(*)))::numeric, 2) as error_rate
+      FROM otel_logs_and_spans
+      WHERE project_id='{{project_id}}'
+        AND attributes___db___system___name IS NOT NULL
+        AND duration IS NOT NULL
+        AND attributes___db___system___name = '{{var-database}}'
+        {{time_filter}}
+      GROUP BY query_pattern
+      ORDER BY {{table_sort}}
+      LIMIT 30
+    title: Query Optimization Targets (by Total Time)
+    type: table
+  - columns:
+    - align: null
+      clickable: null
+      column_type: null
+      field: db_system
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Database
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: operations
+      link: null
+      progress: column_percent
+      progress_variant: null
+      sortable: true
+      title: Count
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: avg_duration
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Avg
+      unit: ms
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: error_rate
+      link: null
+      progress: value_percent
+      progress_variant: error
+      sortable: true
+      title: Errors
+      unit: '%'
+      width: null
+    default_sort: COUNT(*) DESC
+    description: Click a database to filter all widgets on this tab.
+    layout:
+      h: 5
+      w: 6
+      x: null
+      'y': null
+    on_row_click:
+      navigate_to_tab: null
+      set_variable: database
+      value: '{{row.db_system}}'
+    sql: |
+      SELECT
+        attributes___db___system___name as db_system,
+        COUNT(*) as operations,
+        ROUND((AVG(duration) / 1e6)::numeric, 2) as avg_duration,
+        ROUND((COUNT(*) FILTER (WHERE status_code = 'ERROR') * 100.0 / GREATEST(1, COUNT(*)))::numeric, 2) as error_rate
+      FROM otel_logs_and_spans
+      WHERE project_id='{{project_id}}'
+        AND attributes___db___system___name IS NOT NULL
+        AND duration IS NOT NULL
+        {{time_filter}}
+      GROUP BY db_system
+      ORDER BY {{table_sort}}
+    title: Database Systems
+    type: table
+  - columns:
+    - align: null
+      clickable: null
+      column_type: null
+      field: operation
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Operation
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: count
+      link: null
+      progress: column_percent
+      progress_variant: null
+      sortable: true
+      title: Count
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: avg_ms
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Avg
+      unit: ms
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: error_rate
+      link: null
+      progress: value_percent
+      progress_variant: error
+      sortable: true
+      title: Errors
+      unit: '%'
+      width: null
+    default_sort: COUNT(*) DESC
+    layout:
+      h: 5
+      w: 6
+      x: null
+      'y': null
+    sql: |
+      SELECT
+        UPPER(COALESCE(attributes___db___operation___name, SPLIT_PART(name, ' ', 1), 'UNKNOWN')) as operation,
+        COUNT(*) as count,
+        ROUND((AVG(duration) / 1e6)::numeric, 2) as avg_ms,
+        ROUND((COUNT(*) FILTER (WHERE status_code = 'ERROR') * 100.0 / GREATEST(1, COUNT(*)))::numeric, 2) as error_rate
+      FROM otel_logs_and_spans
+      WHERE project_id='{{project_id}}'
+        AND attributes___db___system___name IS NOT NULL
+        AND duration IS NOT NULL
+        AND attributes___db___system___name = '{{var-database}}'
+        {{time_filter}}
+      GROUP BY operation
+      ORDER BY {{table_sort}}
+      LIMIT 10
+    title: Queries by Operation Type
+    type: table
+  - layout:
+      h: 4
+      w: 6
+      x: null
+      'y': null
+    query: |
+      attributes.db.system.name == "{{var-database}}" and duration != null
+      | summarize percentiles(duration, 50, 95, 99) by bin_auto(timestamp)
+      | order by timestamp desc
+    title: Query Latency Percentiles
+    type: timeseries_line
+    unit: ns
+  - layout:
+      h: 4
+      w: 6
+      x: null
+      'y': null
+    query: |
+      attributes.db.system.name == "{{var-database}}"
+      | summarize count() by bin_auto(timestamp), attributes.db.system.name
+      | order by timestamp desc
+      | limit 10000
+    title: Query Volume by Database
+    type: timeseries
+    unit: queries
+  - columns:
+    - align: null
+      clickable: null
+      column_type: null
+      field: query_pattern
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Query Pattern
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: count
+      link: null
+      progress: column_percent
+      progress_variant: null
+      sortable: true
+      title: Count
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: max_ms
+      link: null
+      progress: column_percent
+      progress_variant: null
+      sortable: true
+      title: Peak
+      unit: ms
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: avg_ms
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Avg
+      unit: ms
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: last_seen
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Last Seen
+      unit: null
+      width: null
+    default_sort: MAX(duration) DESC
+    description: Queries grouped by their normalized pattern, ordered by peak duration.
+      Use Optimization Targets above for total-time impact.
+    layout:
+      h: 5
+      w: 12
+      x: null
+      'y': null
+    sql: |
+      -- Two-stage to keep aggregation cheap: top-500 slowest individual
+      -- executions, then collapse to patterns. Key stays short (300 chars)
+      -- so GROUP BY cardinality is bounded.
+      SELECT
+        query_pattern,
+        COUNT(*) as count,
+        ROUND((MAX(duration) / 1e6)::numeric, 2) as max_ms,
+        ROUND((AVG(duration) / 1e6)::numeric, 2) as avg_ms,
+        MAX(timestamp)::text as last_seen
+      FROM (
+        SELECT
+          duration,
+          timestamp,
+          LEFT(COALESCE(
+            NULLIF(attributes___db___query___summary, ''),
+            CASE WHEN attributes___db___system___name = 'redis' THEN SPLIT_PART(name, ' ', 1)
+                 ELSE COALESCE(attributes___db___query___text, name) END
+          ), 300) as query_pattern
+        FROM otel_logs_and_spans
+        WHERE project_id='{{project_id}}'
+          AND attributes___db___system___name = '{{var-database}}'
+          AND duration IS NOT NULL
+          {{time_filter}}
+        ORDER BY duration DESC
+        LIMIT 500
+      ) top_slow
+      GROUP BY query_pattern
+      ORDER BY {{table_sort}}
+      LIMIT 30
+    title: Slowest Query Patterns
+    type: table
+  - layout:
+      h: 4
+      w: 6
+      x: null
+      'y': null
+    query: |
+      attributes.db.system.name == "{{var-database}}" and status_code == "ERROR"
+      | summarize count() by bin_auto(timestamp), attributes.db.system.name
+      | order by timestamp desc
+      | limit 10000
+    theme: roma
+    title: Database Errors
+    type: timeseries
+  - layout:
+      h: 4
+      w: 6
+      x: null
+      'y': null
+    query: |
+      attributes.db.system.name == "{{var-database}}"
+      | summarize count() by bin_auto(timestamp), resource.service.name
+      | order by timestamp desc
+      | limit 10000
+    title: Queries by Service
+    type: timeseries
+    unit: queries
+- icon: server
+  name: Infra
+  requires: null
+  widgets:
+  - children:
+    - icon: cpu
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      sql: |
+        SELECT ROUND(AVG(value::numeric * 100), 1)::text || '%'
+        FROM otel_metrics
+        WHERE project_id='{{project_id}}'
+          AND metric_name IN ('container.cpu.utilization', 'process.cpu.utilization', 'jvm.cpu.recent_utilization')
+          {{time_filter}}
+      title: Avg CPU Utilization
+      type: stat
+    - icon: hard-drive
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      sql: |
+        SELECT ROUND(AVG(value::numeric), 1)::text || '%'
+        FROM otel_metrics
+        WHERE project_id='{{project_id}}'
+          AND metric_name = 'container.memory.percent'
+          {{time_filter}}
+      title: Avg Memory Usage
+      type: stat
+    - icon: box
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      sql: |
+        SELECT COUNT(DISTINCT resource___container___name)::text
+        FROM otel_metrics
+        WHERE project_id='{{project_id}}'
+          AND resource___container___name IS NOT NULL
+          {{time_filter}}
+      title: Container Count
+      type: stat
+    - icon: layers
+      layout:
+        h: 2
+        w: 3
+        x: null
+        'y': null
+      sql: |
+        SELECT COUNT(DISTINCT resource___service___name)::text
+        FROM otel_metrics
+        WHERE project_id='{{project_id}}'
+          AND resource___service___name IS NOT NULL
+          {{time_filter}}
+      title: Services with Metrics
+      type: stat
+    layout:
+      h: 4
+      w: 12
+      x: null
+      'y': null
+    title: Resource Utilization
+    type: group
+  - layout:
+      h: 5
+      w: 6
+      x: null
+      'y': null
+    sql: |
+      SELECT
+        time_bucket('{{rollup_interval}}', timestamp) as timestamp,
+        COALESCE(resource___service___name, resource___container___name, 'unknown') as series,
+        ROUND(AVG(value::numeric * 100), 2) as value
+      FROM otel_metrics
+      WHERE project_id='{{project_id}}'
+        AND metric_name IN ('container.cpu.utilization', 'jvm.cpu.recent_utilization', 'process.cpu.utilization')
+        {{time_filter}}
+      GROUP BY time_bucket('{{rollup_interval}}', timestamp), series
+      ORDER BY timestamp DESC
+      LIMIT 2000
+    title: CPU Utilization by Service
+    type: timeseries
+    unit: '%'
+  - layout:
+      h: 5
+      w: 6
+      x: null
+      'y': null
+    sql: |
+      SELECT
+        time_bucket('{{rollup_interval}}', timestamp) as timestamp,
+        COALESCE(resource___service___name, resource___container___name, 'unknown') as series,
+        ROUND(AVG(value::numeric), 2) as value
+      FROM otel_metrics
+      WHERE project_id='{{project_id}}'
+        AND metric_name = 'container.memory.percent'
+        {{time_filter}}
+      GROUP BY time_bucket('{{rollup_interval}}', timestamp), series
+      ORDER BY timestamp DESC
+      LIMIT 2000
+    title: Memory Usage by Service
+    type: timeseries
+    unit: '%'
+  - columns:
+    - align: null
+      clickable: null
+      column_type: null
+      field: service
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Service/Container
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: cpu_avg
+      link: null
+      progress: value_percent
+      progress_variant: null
+      sortable: true
+      title: CPU Avg
+      unit: '%'
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: cpu_max
+      link: null
+      progress: value_percent
+      progress_variant: warning
+      sortable: true
+      title: CPU Max
+      unit: '%'
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: mem_avg
+      link: null
+      progress: value_percent
+      progress_variant: null
+      sortable: true
+      title: Mem Avg
+      unit: '%'
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: mem_max
+      link: null
+      progress: value_percent
+      progress_variant: warning
+      sortable: true
+      title: Mem Max
+      unit: '%'
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: data_points
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Samples
+      unit: null
+      width: null
+    default_sort: AVG(c.value) DESC NULLS LAST
+    layout:
+      h: 6
+      w: 12
+      x: null
+      'y': null
+    sql: |
+      WITH cpu_metrics AS (
+        SELECT
+          COALESCE(resource___service___name, resource___container___name, 'unknown') as service,
+          value::numeric * 100 as value
+        FROM otel_metrics
+        WHERE project_id='{{project_id}}'
+          AND metric_name IN ('container.cpu.utilization', 'jvm.cpu.recent_utilization', 'process.cpu.utilization')
+          {{time_filter}}
+      ),
+      mem_metrics AS (
+        SELECT
+          COALESCE(resource___service___name, resource___container___name, 'unknown') as service,
+          value::numeric as value
+        FROM otel_metrics
+        WHERE project_id='{{project_id}}'
+          AND metric_name = 'container.memory.percent'
+          {{time_filter}}
+      )
+      SELECT
+        COALESCE(c.service, m.service) as service,
+        ROUND(AVG(c.value)::numeric, 1) as cpu_avg,
+        ROUND(MAX(c.value)::numeric, 1) as cpu_max,
+        ROUND(AVG(m.value)::numeric, 1) as mem_avg,
+        ROUND(MAX(m.value)::numeric, 1) as mem_max,
+        (COUNT(c.*) + COUNT(m.*)) as data_points
+      FROM cpu_metrics c
+      FULL OUTER JOIN mem_metrics m ON c.service = m.service
+      GROUP BY COALESCE(c.service, m.service)
+      ORDER BY {{table_sort}}
+      LIMIT 20
+    title: Service Resource Usage
+    type: table
+  - layout:
+      h: 4
+      w: 6
+      x: null
+      'y': null
+    sql: |
+      SELECT
+        time_bucket('{{rollup_interval}}', timestamp) as timestamp,
+        COALESCE(resource___service___name, 'kafka') as series,
+        AVG(value) as value
+      FROM otel_metrics
+      WHERE project_id='{{project_id}}'
+        AND metric_name = 'kafka.consumer.assigned_partitions'
+        {{time_filter}}
+      GROUP BY time_bucket('{{rollup_interval}}', timestamp), series
+      ORDER BY timestamp DESC
+      LIMIT 1000
+    title: Kafka Consumer Lag
+    type: timeseries
+    unit: partitions
+  - layout:
+      h: 4
+      w: 6
+      x: null
+      'y': null
+    sql: |
+      SELECT
+        time_bucket('{{rollup_interval}}', timestamp) as timestamp,
+        CASE
+          WHEN metric_name = 'system.cpu.load_average.1m' THEN '1 min'
+          WHEN metric_name = 'system.cpu.load_average.5m' THEN '5 min'
+          WHEN metric_name = 'system.cpu.load_average.15m' THEN '15 min'
+        END as series,
+        AVG(value) as value
+      FROM otel_metrics
+      WHERE project_id='{{project_id}}'
+        AND metric_name IN ('system.cpu.load_average.1m', 'system.cpu.load_average.5m', 'system.cpu.load_average.15m')
+        {{time_filter}}
+      GROUP BY time_bucket('{{rollup_interval}}', timestamp), metric_name
+      ORDER BY timestamp DESC
+      LIMIT 3000
+    title: System Load Average
+    type: timeseries
+  - layout:
+      h: 4
+      w: 6
+      x: null
+      'y': null
+    sql: |
+      SELECT
+        time_bucket('{{rollup_interval}}', timestamp) as timestamp,
+        metric_name as series,
+        AVG(value) / 1048576 as value
+      FROM otel_metrics
+      WHERE project_id='{{project_id}}'
+        AND metric_name IN ('redis.memory.used', 'redis.memory.rss', 'redis.memory.peak')
+        {{time_filter}}
+      GROUP BY time_bucket('{{rollup_interval}}', timestamp), metric_name
+      ORDER BY timestamp DESC
+      LIMIT 3000
+    title: Redis Memory Usage
+    type: timeseries
+    unit: MB
+  - columns:
+    - align: null
+      clickable: null
+      column_type: null
+      field: metric_name
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: null
+      title: Metric
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: data_points
+      link: null
+      progress: column_percent
+      progress_variant: null
+      sortable: true
+      title: Data Points
+      unit: null
+      width: null
+    - align: null
+      clickable: null
+      column_type: null
+      field: unit
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Unit
+      unit: null
+      width: null
+    default_sort: COUNT(*) DESC
+    layout:
+      h: 4
+      w: 6
+      x: null
+      'y': null
+    sql: |
+      SELECT
+        metric_name,
+        COUNT(*) as data_points,
+        COALESCE(MAX(metric_unit), '-') as unit
+      FROM otel_metrics
+      WHERE project_id='{{project_id}}'
+        {{time_filter}}
+      GROUP BY metric_name
+      ORDER BY {{table_sort}}
+      LIMIT 20
+    title: Available Metrics
+    type: table
+tags: []
+teams:
+- everyone
+time_range: null
+title: Vic's Dashboard
+variables:
+- facet_field: service.name
+  key: service
+  multi: false
+  reload_on_change: true
+  sql:
+    source: timefusion
+    statement: |
+      SELECT DISTINCT resource___service___name
+      FROM otel_logs_and_spans
+      WHERE project_id='{{project_id}}'
+        AND resource___service___name IS NOT NULL
+        {{time_filter}}
+      LIMIT 100
+  title: Service
+  type: query
+- depends_on: service
+  key: resource
+  multi: false
+  reload_on_change: true
+  sql:
+    source: timefusion
+    statement: |
+      SELECT DISTINCT
+        name as value,
+        name as label
+      FROM otel_logs_and_spans
+      WHERE project_id='{{project_id}}'
+        AND resource___service___name = '{{var-service}}'
+        AND name IS NOT NULL
+        {{time_filter}}
+      LIMIT 500
+  title: Resource/Operation
+  type: query
+- facet_field: db.system.name
+  key: database
+  multi: false
+  reload_on_change: true
+  sql:
+    source: timefusion
+    statement: |
+      SELECT DISTINCT attributes___db___system___name
+      FROM otel_logs_and_spans
+      WHERE project_id='{{project_id}}'
+        AND attributes___db___system___name IS NOT NULL
+        {{time_filter}}
+      LIMIT 50
+  title: Database System
+  type: query
+widgets: []
