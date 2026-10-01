@@ -1,0 +1,27 @@
+constants: null
+description: null
+discovery_metrics: null
+file: null
+icon: null
+preview: null
+refresh_interval: null
+tabs: null
+tags: []
+teams:
+- everyone
+time_range: null
+title: Blank dashboard
+variables: null
+widgets:
+- _dashboard_id: 189f0884-e08d-476e-a10e-f16726ebeb89
+  _project_id: 00000000-0000-0000-0000-000000000000
+  hide_subtitle: true
+  id: 98f8d2b2-26ed-4310-a450-9057efbdd826
+  layout:
+    h: 3
+    w: 3
+    x: null
+    'y': null
+  title: New Widget
+  type: timeseries
+  unit: ms
