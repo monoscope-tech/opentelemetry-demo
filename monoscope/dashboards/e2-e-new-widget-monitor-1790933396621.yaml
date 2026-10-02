@@ -1,0 +1,30 @@
+constants: null
+description: null
+discovery_metrics: null
+file: null
+icon: null
+preview: null
+refresh_interval: null
+tabs: null
+tags: []
+teams:
+- everyone
+time_range: null
+title: E2E New Widget Monitor 1790933396621
+variables: null
+widgets:
+- _dashboard_id: e9fbb597-a34e-4a4a-aa5c-b6d70b98f490
+  _project_id: 00000000-0000-0000-0000-000000000000
+  alert_threshold: 1
+  hide_subtitle: true
+  id: 53feed78-e6d0-4053-ba0b-6d696ff0842f
+  layout:
+    h: 3
+    w: 3
+    x: null
+    'y': null
+  query: name == "e2e-new-widget-monitor"
+  show_threshold_lines: always
+  title: New widget errors
+  type: timeseries
+  unit: ms
