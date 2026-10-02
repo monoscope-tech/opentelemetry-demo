@@ -1,0 +1,29 @@
+constants: null
+description: null
+discovery_metrics: null
+file: null
+icon: null
+preview: null
+refresh_interval: null
+tabs: null
+tags: []
+teams:
+- everyone
+time_range: null
+title: E2E Copy Target 1790933552230
+variables: null
+widgets:
+- _dashboard_id: 2c1d563f-50c6-4d75-b8c8-b94540f84390
+  _project_id: 00000000-0000-0000-0000-000000000000
+  hide_subtitle: true
+  id: f5d48987-6116-49c1-b4a1-08935730911d
+  layout:
+    h: 3
+    w: 3
+    x: null
+    'y': null
+  query: ''
+  show_threshold_lines: always
+  title: Copied Widget
+  type: timeseries
+  unit: ms
