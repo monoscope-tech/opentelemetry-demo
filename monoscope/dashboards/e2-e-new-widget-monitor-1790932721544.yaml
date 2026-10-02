@@ -1,0 +1,30 @@
+constants: null
+description: null
+discovery_metrics: null
+file: null
+icon: null
+preview: null
+refresh_interval: null
+tabs: null
+tags: []
+teams:
+- everyone
+time_range: null
+title: E2E New Widget Monitor 1790932721544
+variables: null
+widgets:
+- _dashboard_id: 14ddc002-30e3-4e3a-8e9b-3268df9f0f85
+  _project_id: 00000000-0000-0000-0000-000000000000
+  alert_threshold: 1
+  hide_subtitle: true
+  id: 202b5311-8def-4fae-a4cc-24bf88fd4d93
+  layout:
+    h: 3
+    w: 3
+    x: null
+    'y': null
+  query: name == "e2e-new-widget-monitor"
+  show_threshold_lines: always
+  title: New Widget
+  type: timeseries
+  unit: ms
