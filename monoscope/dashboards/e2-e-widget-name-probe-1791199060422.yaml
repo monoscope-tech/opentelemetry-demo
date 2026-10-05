@@ -1,0 +1,29 @@
+constants: null
+description: null
+discovery_metrics: null
+file: null
+icon: null
+preview: null
+refresh_interval: null
+tabs: null
+tags: []
+teams:
+- everyone
+time_range: null
+title: E2E Widget Name Probe 1791199060422
+variables: null
+widgets:
+- _dashboard_id: 0cc88816-1904-4abe-9d47-65cc45e770d9
+  _project_id: 00000000-0000-0000-0000-000000000000
+  hide_subtitle: true
+  id: cac739d8-5a5d-408c-944e-421267c57be9
+  layout:
+    h: 3
+    w: 3
+    x: null
+    'y': null
+  query: level == "ERROR"
+  show_threshold_lines: always
+  title: Named after query
+  type: timeseries
+  unit: ms
