@@ -27,302 +27,47 @@ tabs:
   name: Overview
   requires: null
   widgets:
-  - children:
-    - description: Request rate across inbound requests AND SDK-instrumented outbound
-        calls. Measures system load and usage patterns.
-      icon: activity
-      layout:
-        h: 2
-        w: 3
-        x: null
-        'y': null
-      query: |
-        (kind == "server" or name == "apitoolkit-http-span" or name == "monoscope.http")
-        | summarize count() by bin_auto(timestamp)
-      summarize_by: rate
-      title: Traffic
-      type: timeseries_stat
-      unit: req/min
-    - description: 95th percentile response time across inbound requests AND SDK-instrumented
-        outbound calls. 95% complete faster than this.
-      icon: clock
-      layout:
-        h: 2
-        w: 3
-        x: null
-        'y': null
-      query: |
-        (kind == "server" or name == "apitoolkit-http-span" or name == "monoscope.http") and duration != null
-        | summarize p95(duration) / 1000000 by bin_auto(timestamp)
-      summarize_by: mean
-      title: P95 Latency
-      type: timeseries_stat
-      unit: ms
-    - alert_threshold: 5
-      description: Percentage of failed requests (5xx errors) across inbound requests
-        AND SDK-instrumented outbound calls. A failing third-party dependency raises
-        this. Lower is better.
-      icon: alert-triangle
-      layout:
-        h: 2
-        w: 3
-        x: null
-        'y': null
-      query: |
-        (kind == "server" or name == "apitoolkit-http-span" or name == "monoscope.http")
-        | summarize round(countif(status_code == "ERROR" or coalesce(attributes.http.response.status_code, 0) >= 500) * 100.0 / count(), 2) by bin_auto(timestamp)
-      summarize_by: mean
-      title: Error Rate
-      type: timeseries_stat
-      unit: '%'
-    - description: Application Performance Index (0-1). Measures user satisfaction
-        based on response times. >0.9 is excellent, <0.5 is poor.
-      icon: smile
-      layout:
-        h: 2
-        w: 3
-        x: null
-        'y': null
-      sql: SELECT ROUND((SUM(CASE WHEN duration <= 500000000 THEN 1.0 WHEN duration
-        <= 2000000000 THEN 0.5 ELSE 0 END)) / GREATEST(1, COUNT(*))::numeric, 2)::float
-        FROM otel_logs_and_spans WHERE project_id='{{project_id}}' AND (kind = 'server'
-        OR name = 'apitoolkit-http-span' OR name = 'monoscope.http') AND duration
-        IS NOT NULL {{time_filter}}
-      title: Apdex Score
-      type: stat
-      unit: /1.0
-    description: 'The four key metrics from Google SRE for monitoring distributed
-      systems: Traffic, Latency, Errors, and Saturation.'
-    layout:
-      h: 4
-      w: 12
-      x: null
-      'y': null
-    title: Golden Signals
-    type: group
-  - children:
-    - icon: server
-      layout:
-        h: 2
-        w: 3
-        x: null
-        'y': null
-      query: |
-        resource.service.name != null
-        | summarize dcount(resource.service.name)
-      title: Active Services
-      type: stat
-      unit: services
-    - icon: list-tree
-      layout:
-        h: 2
-        w: 3
-        x: null
-        'y': null
-      query: |
-        (kind == "server" or name == "apitoolkit-http-span" or name == "monoscope.http")
-        | summarize count()
-      title: Total Requests
-      type: stat
-      unit: reqs
-    - icon: database
-      layout:
-        h: 2
-        w: 3
-        x: null
-        'y': null
-      query: |
-        attributes.db.system.name != null
-        | summarize dcount(attributes.db.system.name)
-      title: DB Systems
-      type: stat
-      unit: systems
-    - icon: route
-      layout:
-        h: 2
-        w: 3
-        x: null
-        'y': null
-      query: |
-        (kind == "server" or name == "apitoolkit-http-span") and name != null
-        | summarize dcount(name)
-      title: Unique Endpoints
-      type: stat
-      unit: endpoints
-    layout:
-      h: 2
-      w: 12
-      x: null
-      'y': null
-    title: System Overview
-    type: group
-  - columns:
-    - align: null
-      clickable: null
-      column_type: null
-      field: service_name
-      link: null
-      progress: null
-      progress_variant: null
-      sortable: true
-      title: Service
-      unit: null
-      width: null
-    - align: null
-      clickable: null
-      column_type: null
-      field: apdex
-      link: null
-      progress: null
-      progress_variant: null
-      sortable: true
-      title: Apdex
-      unit: null
-      width: null
-    - align: null
-      clickable: null
-      column_type: null
-      field: throughput
-      link: null
-      progress: column_percent
-      progress_variant: null
-      sortable: true
-      title: Throughput
-      unit: req/min
-      width: null
-    - align: null
-      clickable: null
-      column_type: null
-      field: error_rate
-      link: null
-      progress: value_percent
-      progress_variant: error
-      sortable: true
-      title: Errors
-      unit: '%'
-      width: null
-    - align: null
-      clickable: null
-      column_type: null
-      field: p95_latency
-      link: null
-      progress: column_percent
-      progress_variant: null
-      sortable: true
-      title: P95
-      unit: ms
-      width: null
-    default_sort: COUNT(*)::numeric / GREATEST(1, EXTRACT(EPOCH FROM (MAX(timestamp)
-      - MIN(timestamp))) / 60) DESC
-    description: Click a service row to view its detailed metrics in the Service tab.
-    layout:
-      h: 6
-      w: 6
-      x: null
-      'y': null
-    on_row_click:
-      navigate_to_tab: Service
-      set_variable: service
-      value: '{{row.service_name}}'
-    sql: |
-      SELECT resource___service___name as service_name, ROUND((SUM(CASE WHEN duration <= 500000000 THEN 1.0 WHEN duration <= 2000000000 THEN 0.5 ELSE 0 END)) / GREATEST(1, COUNT(*))::numeric, 2) as apdex, ROUND((COUNT(*)::numeric / GREATEST(1, EXTRACT(EPOCH FROM (MAX(timestamp) - MIN(timestamp))) / 60)), 2) as throughput, ROUND((COUNT(*) FILTER (WHERE status_code = 'ERROR' OR COALESCE(attributes___http___response___status_code, 0) >= 500) * 100.0 / GREATEST(1, COUNT(*))::numeric), 2) as error_rate, ROUND((approx_percentile(0.95, percentile_agg(duration))::numeric / 1000000), 2) as p95_latency FROM otel_logs_and_spans WHERE project_id='{{project_id}}' AND resource___service___name IS NOT NULL AND kind = 'server' AND duration IS NOT NULL {{time_filter}} GROUP BY resource___service___name ORDER BY {{table_sort}} LIMIT 50
-    title: Services Health
-    type: table
-  - layout:
-      h: 6
-      w: 6
-      x: null
-      'y': null
-    title: Ongoing Issues
-    type: anomalies
-  - layout:
-      h: 4
-      w: 6
-      x: null
-      'y': null
-    query: |
-      resource.service.name != null
-      | summarize count() by bin_auto(timestamp), resource.service.name
-      | order by timestamp desc
-      | limit 10000
-    title: Events by Service
-    type: timeseries
-    unit: events
-  - layout:
-      h: 4
-      w: 6
-      x: null
-      'y': null
-    query: |
-      status_code == "ERROR" and resource.service.name != null
-      | summarize count() by bin_auto(timestamp), resource.service.name
-      | order by timestamp desc
-      | limit 10000
-    theme: roma
-    title: Error Rates by Service
-    type: timeseries
-    unit: errors
-  - layout:
-      h: 4
-      w: 6
-      x: null
-      'y': null
-    query: |
-      resource.service.name != null and kind == "server"
-      | summarize count() by bin_auto(timestamp), resource.service.name
-      | order by timestamp desc
-      | limit 10000
-    title: HTTP Request Volume by Service
-    type: timeseries
-    unit: reqs
-  - layout:
-      h: 4
-      w: 6
-      x: null
-      'y': null
-    query: |
-      (kind == "server" or name == "apitoolkit-http-span" or name == "monoscope.http") and attributes.http.response.status_code != null
-      | summarize count() by bin_auto(timestamp), coalesce(tostring(attributes.http.response.status_code), "unknown")
-      | order by timestamp desc
-      | limit 10000
-    title: HTTP Requests by Status Code
-    type: timeseries
-    unit: reqs
-  - layout:
-      h: 4
-      w: 6
-      x: null
-      'y': null
-    query: |
-      (kind == "server" or name == "apitoolkit-http-span" or name == "monoscope.http") and attributes.http.response.status_code != null and attributes.http.response.status_code >= 400
-      | extend error_category = case(attributes.http.response.status_code >= 500, "5xx", attributes.http.response.status_code >= 400, "4xx", tostring(attributes.http.response.status_code))
-      | summarize count() by bin_auto(timestamp), error_category
-      | order by timestamp desc
-      | limit 10000
-    theme: roma
-    title: HTTP Errors (4xx & 5xx) - Incoming
-    type: timeseries
-    unit: errors
-  - description: Response time distribution. P50 is median, P99 shows worst-case latency
-      for 1% of requests.
+  - _dashboard_id: 4742e0ef-b8c0-499b-b5b3-a983b2b025e8
+    _project_id: 00000000-0000-0000-0000-000000000000
     hide_subtitle: true
+    id: 130927a5-fee3-4813-8ccc-679b45223dd6
     layout:
-      h: 4
-      w: 6
-      x: null
-      'y': null
-    query: |
-      (kind == "server" or name == "apitoolkit-http-span" or name == "monoscope.http") and duration != null
-      | summarize percentiles(duration, 50, 75, 90, 95, 99) by bin_auto(timestamp)
-      | order by timestamp desc
-    summarize_by: max
-    title: Request Latency Percentiles
-    type: timeseries_line
-    unit: ns
+      h: 3
+      w: 3
+      x: 9
+      'y': 24
+    title: 8 Hour Errors
+    type: timeseries
+    unit: ms
+  - _dashboard_id: 4742e0ef-b8c0-499b-b5b3-a983b2b025e8
+    _project_id: 00000000-0000-0000-0000-000000000000
+    hide_subtitle: true
+    id: 52e0949d-f59d-49d7-bdad-b84141a18542
+    layout:
+      h: 3
+      w: 3
+      x: 0
+      'y': 32
+    show_threshold_lines: always
+    title: New Widget
+    type: timeseries
+    unit: ms
+  - _dashboard_id: 4742e0ef-b8c0-499b-b5b3-a983b2b025e8
+    _project_id: 00000000-0000-0000-0000-000000000000
+    hide_subtitle: true
+    id: 8fe0d006-a3a8-49a2-9505-34ab669704d1
+    layout:
+      h: 3
+      w: 3
+      x: 6
+      'y': 24
+    title: 8 Hour Errors
+    type: timeseries
+    unit: ms
   - columns:
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: db_system
       link: null
       progress: null
@@ -332,8 +77,8 @@ tabs:
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: queries
       link: null
       progress: column_percent
@@ -343,8 +88,8 @@ tabs:
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: avg_ms
       link: null
       progress: null
@@ -354,8 +99,8 @@ tabs:
       unit: ms
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: error_rate
       link: null
       progress: value_percent
@@ -369,8 +114,8 @@ tabs:
     layout:
       h: 4
       w: 6
-      x: null
-      'y': null
+      x: 0
+      'y': 24
     on_row_click:
       navigate_to_tab: Databases
       set_variable: database
@@ -392,9 +137,173 @@ tabs:
     type: table
   - layout:
       h: 4
+      w: 6
+      x: 6
+      'y': 12
+    query: |
+      status_code == "ERROR" and resource.service.name != null
+      | summarize count() by bin_auto(timestamp), resource.service.name
+      | order by timestamp desc
+      | limit 10000
+    theme: roma
+    title: Error Rates by Service
+    type: timeseries
+    unit: errors
+  - layout:
+      h: 4
+      w: 6
+      x: 0
+      'y': 12
+    query: |
+      resource.service.name != null
+      | summarize count() by bin_auto(timestamp), resource.service.name
+      | order by timestamp desc
+      | limit 10000
+    title: Events by Service
+    type: timeseries
+    unit: events
+  - children:
+    - description: Application Performance Index (0-1). Measures user satisfaction
+        based on response times. >0.9 is excellent, <0.5 is poor.
+      icon: smile
+      layout:
+        h: 2
+        w: 3
+        x: 9
+        'y': 0
+      sql: SELECT ROUND((SUM(CASE WHEN duration <= 500000000 THEN 1.0 WHEN duration
+        <= 2000000000 THEN 0.5 ELSE 0 END)) / GREATEST(1, COUNT(*))::numeric, 2)::float
+        FROM otel_logs_and_spans WHERE project_id='{{project_id}}' AND (kind = 'server'
+        OR name = 'apitoolkit-http-span' OR name = 'monoscope.http') AND duration
+        IS NOT NULL {{time_filter}}
+      title: Apdex Score
+      type: stat
+      unit: /1.0
+    - alert_threshold: 5
+      description: Percentage of failed requests (5xx errors) across inbound requests
+        AND SDK-instrumented outbound calls. A failing third-party dependency raises
+        this. Lower is better.
+      icon: alert-triangle
+      layout:
+        h: 2
+        w: 3
+        x: 6
+        'y': 0
+      query: |
+        (kind == "server" or name == "apitoolkit-http-span" or name == "monoscope.http")
+        | summarize round(countif(status_code == "ERROR" or coalesce(attributes.http.response.status_code, 0) >= 500) * 100.0 / count(), 2) by bin_auto(timestamp)
+      summarize_by: mean
+      title: Error Rate
+      type: timeseries_stat
+      unit: '%'
+    - description: 95th percentile response time across inbound requests AND SDK-instrumented
+        outbound calls. 95% complete faster than this.
+      icon: clock
+      layout:
+        h: 2
+        w: 3
+        x: 3
+        'y': 0
+      query: |
+        (kind == "server" or name == "apitoolkit-http-span" or name == "monoscope.http") and duration != null
+        | summarize p95(duration) / 1000000 by bin_auto(timestamp)
+      summarize_by: mean
+      title: P95 Latency
+      type: timeseries_stat
+      unit: ms
+    - description: Request rate across inbound requests AND SDK-instrumented outbound
+        calls. Measures system load and usage patterns.
+      icon: activity
+      layout:
+        h: 2
+        w: 3
+        x: 0
+        'y': 0
+      query: |
+        (kind == "server" or name == "apitoolkit-http-span" or name == "monoscope.http")
+        | summarize count() by bin_auto(timestamp)
+      summarize_by: rate
+      title: Traffic
+      type: timeseries_stat
+      unit: req/min
+    description: 'The four key metrics from Google SRE for monitoring distributed
+      systems: Traffic, Latency, Errors, and Saturation.'
+    layout:
+      h: 3
       w: 12
-      x: null
-      'y': null
+      x: 0
+      'y': 0
+    title: Golden Signals
+    type: group
+  - layout:
+      h: 4
+      w: 6
+      x: 0
+      'y': 20
+    query: |
+      (kind == "server" or name == "apitoolkit-http-span" or name == "monoscope.http") and attributes.http.response.status_code != null and attributes.http.response.status_code >= 400
+      | extend error_category = case(attributes.http.response.status_code >= 500, "5xx", attributes.http.response.status_code >= 400, "4xx", tostring(attributes.http.response.status_code))
+      | summarize count() by bin_auto(timestamp), error_category
+      | order by timestamp desc
+      | limit 10000
+    theme: roma
+    title: HTTP Errors (4xx & 5xx) - Incoming
+    type: timeseries
+    unit: errors
+  - layout:
+      h: 4
+      w: 6
+      x: 0
+      'y': 16
+    query: |
+      resource.service.name != null and kind == "server"
+      | summarize count() by bin_auto(timestamp), resource.service.name
+      | order by timestamp desc
+      | limit 10000
+    title: HTTP Request Volume by Service
+    type: timeseries
+    unit: reqs
+  - layout:
+      h: 4
+      w: 6
+      x: 6
+      'y': 16
+    query: |
+      (kind == "server" or name == "apitoolkit-http-span" or name == "monoscope.http") and attributes.http.response.status_code != null
+      | summarize count() by bin_auto(timestamp), coalesce(tostring(attributes.http.response.status_code), "unknown")
+      | order by timestamp desc
+      | limit 10000
+    title: HTTP Requests by Status Code
+    type: timeseries
+    unit: reqs
+  - layout:
+      h: 6
+      w: 6
+      x: 6
+      'y': 6
+    title: Ongoing Issues
+    type: anomalies
+  - description: Response time distribution. P50 is median, P99 shows worst-case latency
+      for 1% of requests.
+    hide_subtitle: true
+    layout:
+      h: 4
+      w: 6
+      x: 6
+      'y': 20
+    query: |
+      (kind == "server" or name == "apitoolkit-http-span" or name == "monoscope.http") and duration != null
+      | summarize percentiles(duration, 50, 75, 90, 95, 99) by bin_auto(timestamp)
+      | order by timestamp desc
+    summarize_by: max
+    title: Request Latency Percentiles
+    type: timeseries_line
+    unit: ns
+  - layout:
+      h: 4
+      w: 12
+      x: 0
+      'y': 28
     sql: "WITH top_endpoints AS (\n  SELECT \n    attributes___http___request___method
       || ' ' || attributes___url___path as endpoint,\n    COUNT(*) as total_count\n
       \ FROM otel_logs_and_spans\n  WHERE project_id='{{project_id}}'\n    AND (kind
@@ -412,28 +321,147 @@ tabs:
     title: Requests by Endpoint
     type: timeseries
     unit: reqs
+  - columns:
+    - align: null
+      column_type: null
+      copyable: null
+      field: service_name
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Service
+      unit: null
+      width: null
+    - align: null
+      column_type: null
+      copyable: null
+      field: apdex
+      link: null
+      progress: null
+      progress_variant: null
+      sortable: true
+      title: Apdex
+      unit: null
+      width: null
+    - align: null
+      column_type: null
+      copyable: null
+      field: throughput
+      link: null
+      progress: column_percent
+      progress_variant: null
+      sortable: true
+      title: Throughput
+      unit: req/min
+      width: null
+    - align: null
+      column_type: null
+      copyable: null
+      field: error_rate
+      link: null
+      progress: value_percent
+      progress_variant: error
+      sortable: true
+      title: Errors
+      unit: '%'
+      width: null
+    - align: null
+      column_type: null
+      copyable: null
+      field: p95_latency
+      link: null
+      progress: column_percent
+      progress_variant: null
+      sortable: true
+      title: P95
+      unit: ms
+      width: null
+    default_sort: COUNT(*)::numeric / GREATEST(1, EXTRACT(EPOCH FROM (MAX(timestamp)
+      - MIN(timestamp))) / 60) DESC
+    description: Click a service row to view its detailed metrics in the Service tab.
+    layout:
+      h: 6
+      w: 6
+      x: 0
+      'y': 6
+    on_row_click:
+      navigate_to_tab: Service
+      set_variable: service
+      value: '{{row.service_name}}'
+    sql: |
+      SELECT resource___service___name as service_name, ROUND((SUM(CASE WHEN duration <= 500000000 THEN 1.0 WHEN duration <= 2000000000 THEN 0.5 ELSE 0 END)) / GREATEST(1, COUNT(*))::numeric, 2) as apdex, ROUND((COUNT(*)::numeric / GREATEST(1, EXTRACT(EPOCH FROM (MAX(timestamp) - MIN(timestamp))) / 60)), 2) as throughput, ROUND((COUNT(*) FILTER (WHERE status_code = 'ERROR' OR COALESCE(attributes___http___response___status_code, 0) >= 500) * 100.0 / GREATEST(1, COUNT(*))::numeric), 2) as error_rate, ROUND((approx_percentile(0.95, percentile_agg(duration))::numeric / 1000000), 2) as p95_latency FROM otel_logs_and_spans WHERE project_id='{{project_id}}' AND resource___service___name IS NOT NULL AND kind = 'server' AND duration IS NOT NULL {{time_filter}} GROUP BY resource___service___name ORDER BY {{table_sort}} LIMIT 50
+    title: Services Health
+    type: table
+  - children:
+    - icon: server
+      layout:
+        h: 2
+        w: 3
+        x: 0
+        'y': 0
+      query: |
+        resource.service.name != null
+        | summarize dcount(resource.service.name)
+      title: Active Services
+      type: stat
+      unit: services
+    - icon: database
+      layout:
+        h: 2
+        w: 3
+        x: 6
+        'y': 0
+      query: |
+        attributes.db.system.name != null
+        | summarize dcount(attributes.db.system.name)
+      title: DB Systems
+      type: stat
+      unit: systems
+    - icon: list-tree
+      layout:
+        h: 2
+        w: 3
+        x: 3
+        'y': 0
+      query: |
+        (kind == "server" or name == "apitoolkit-http-span" or name == "monoscope.http")
+        | summarize count()
+      title: Total Requests
+      type: stat
+      unit: reqs
+    - icon: route
+      layout:
+        h: 2
+        w: 3
+        x: 9
+        'y': 0
+      query: |
+        (kind == "server" or name == "apitoolkit-http-span") and name != null
+        | summarize dcount(name)
+      title: Unique Endpoints
+      type: stat
+      unit: endpoints
+    layout:
+      h: 3
+      w: 12
+      x: 0
+      'y': 3
+    title: System Overview
+    type: group
   - _dashboard_id: 4742e0ef-b8c0-499b-b5b3-a983b2b025e8
     _project_id: 00000000-0000-0000-0000-000000000000
     hide_subtitle: true
-    id: 8fe0d006-a3a8-49a2-9505-34ab669704d1
+    id: 20036285-c23e-4ca5-af04-c47e9213bd29
     layout:
       h: 3
       w: 3
       x: null
       'y': null
-    title: 8 Hour Errors
-    type: timeseries
-    unit: ms
-  - _dashboard_id: 4742e0ef-b8c0-499b-b5b3-a983b2b025e8
-    _project_id: 00000000-0000-0000-0000-000000000000
-    hide_subtitle: true
-    id: 130927a5-fee3-4813-8ccc-679b45223dd6
-    layout:
-      h: 3
-      w: 3
-      x: null
-      'y': null
-    title: 8 Hour Errors
+    query: 'level == "ERROR" or "WARN" '
+    raw_query: level == "ERROR"
+    show_threshold_lines: always
+    title: Custom Test A
     type: timeseries
     unit: ms
 - icon: server
@@ -621,8 +649,8 @@ tabs:
     unit: ns
   - columns:
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: resource_name
       link: null
       progress: null
@@ -632,8 +660,8 @@ tabs:
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: requests
       link: null
       progress: column_percent
@@ -643,8 +671,8 @@ tabs:
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: total_time
       link: null
       progress: column_percent
@@ -654,8 +682,8 @@ tabs:
       unit: s
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: p95_latency
       link: null
       progress: column_percent
@@ -665,8 +693,8 @@ tabs:
       unit: ms
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: errors
       link: null
       progress: column_percent
@@ -676,8 +704,8 @@ tabs:
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: error_rate
       link: null
       progress: value_percent
@@ -765,8 +793,8 @@ tabs:
     type: logs
   - columns:
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: resource_name
       link: null
       progress: null
@@ -776,8 +804,8 @@ tabs:
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: span_name
       link: null
       progress: null
@@ -787,8 +815,8 @@ tabs:
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: avg_duration
       link: null
       progress: null
@@ -798,8 +826,8 @@ tabs:
       unit: ms
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: span_count
       link: null
       progress: null
@@ -834,8 +862,8 @@ tabs:
     type: table
   - columns:
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: operation_name
       link: null
       progress: null
@@ -845,8 +873,8 @@ tabs:
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: count
       link: null
       progress: column_percent
@@ -856,8 +884,8 @@ tabs:
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: error_rate
       link: null
       progress: value_percent
@@ -867,8 +895,8 @@ tabs:
       unit: '%'
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: avg_duration
       link: null
       progress: column_percent
@@ -878,8 +906,8 @@ tabs:
       unit: ms
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: p95_duration
       link: null
       progress: column_percent
@@ -1103,8 +1131,8 @@ tabs:
     type: group
   - columns:
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: query_pattern
       link: null
       progress: null
@@ -1114,8 +1142,8 @@ tabs:
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: count
       link: null
       progress: column_percent
@@ -1125,8 +1153,8 @@ tabs:
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: avg_ms
       link: null
       progress: null
@@ -1136,8 +1164,8 @@ tabs:
       unit: ms
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: p95_ms
       link: null
       progress: null
@@ -1147,8 +1175,8 @@ tabs:
       unit: ms
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: total_time
       link: null
       progress: column_percent
@@ -1158,8 +1186,8 @@ tabs:
       unit: s
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: error_rate
       link: null
       progress: value_percent
@@ -1202,8 +1230,8 @@ tabs:
     type: table
   - columns:
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: db_system
       link: null
       progress: null
@@ -1213,8 +1241,8 @@ tabs:
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: operations
       link: null
       progress: column_percent
@@ -1224,8 +1252,8 @@ tabs:
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: avg_duration
       link: null
       progress: null
@@ -1235,8 +1263,8 @@ tabs:
       unit: ms
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: error_rate
       link: null
       progress: value_percent
@@ -1273,8 +1301,8 @@ tabs:
     type: table
   - columns:
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: operation
       link: null
       progress: null
@@ -1284,8 +1312,8 @@ tabs:
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: count
       link: null
       progress: column_percent
@@ -1295,8 +1323,8 @@ tabs:
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: avg_ms
       link: null
       progress: null
@@ -1306,8 +1334,8 @@ tabs:
       unit: ms
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: error_rate
       link: null
       progress: value_percent
@@ -1366,8 +1394,8 @@ tabs:
     unit: queries
   - columns:
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: query_pattern
       link: null
       progress: null
@@ -1377,8 +1405,8 @@ tabs:
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: count
       link: null
       progress: column_percent
@@ -1388,8 +1416,8 @@ tabs:
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: max_ms
       link: null
       progress: column_percent
@@ -1399,8 +1427,8 @@ tabs:
       unit: ms
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: avg_ms
       link: null
       progress: null
@@ -1410,8 +1438,8 @@ tabs:
       unit: ms
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: last_seen
       link: null
       progress: null
@@ -1598,8 +1626,8 @@ tabs:
     unit: '%'
   - columns:
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: service
       link: null
       progress: null
@@ -1609,8 +1637,8 @@ tabs:
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: cpu_avg
       link: null
       progress: value_percent
@@ -1620,8 +1648,8 @@ tabs:
       unit: '%'
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: cpu_max
       link: null
       progress: value_percent
@@ -1631,8 +1659,8 @@ tabs:
       unit: '%'
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: mem_avg
       link: null
       progress: value_percent
@@ -1642,8 +1670,8 @@ tabs:
       unit: '%'
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: mem_max
       link: null
       progress: value_percent
@@ -1653,8 +1681,8 @@ tabs:
       unit: '%'
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: data_points
       link: null
       progress: null
@@ -1767,8 +1795,8 @@ tabs:
     unit: MB
   - columns:
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: metric_name
       link: null
       progress: null
@@ -1778,8 +1806,8 @@ tabs:
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: data_points
       link: null
       progress: column_percent
@@ -1789,8 +1817,8 @@ tabs:
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
       field: unit
       link: null
       progress: null
