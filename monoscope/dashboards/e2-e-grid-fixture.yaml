@@ -14,12 +14,14 @@ teams: []
 time_range: null
 title: E2E Grid Fixture
 variables: null
+views: null
 widgets:
 - layout:
     h: 4
+    min_width: null
     w: 6
-    x: 6
-    'y': 15
+    x: 0
+    'y': 19
   query: metrics | where metric_name == "apache.connections.async" | summarize avg(value)
     by bin_auto(timestamp), attributes.connection_state
   title: Async Connections
@@ -27,9 +29,10 @@ widgets:
   unit: connections
 - layout:
     h: 4
+    min_width: null
     w: 6
-    x: 6
-    'y': 11
+    x: 0
+    'y': 15
   query: metrics | where metric_name == "apache.cpu.load" | summarize avg(value) by
     bin_auto(timestamp)
   title: CPU Load
@@ -39,18 +42,34 @@ widgets:
     matching request-rate spikes mean slow requests.
   layout:
     h: 4
+    min_width: null
     w: 6
-    x: 0
+    x: 6
     'y': 11
   query: metrics | where metric_name == "apache.request.time" | summarize range(value)
     by bin_auto(timestamp)
   title: Cumulative Request Time
   type: timeseries
   unit: ms
-- layout:
+- _dashboard_id: 11e504c1-050f-45f9-af9d-b88af88991bf
+  _project_id: 00000000-0000-0000-0000-000000000000
+  id: d9ba4e06-4ac3-486a-87fb-1601339b1181
+  layout:
     h: 4
+    min_width: null
     w: 6
     x: 0
+    'y': 3
+  query: metrics | where metric_name == "apache.requests" | summarize range(value)
+    by bin_auto(timestamp)
+  title: Request Rate (Copy)
+  type: timeseries
+  unit: reqs
+- layout:
+    h: 4
+    min_width: null
+    w: 6
+    x: 6
     'y': 15
   query: metrics | where metric_name in ("apache.load.1", "apache.load.5", "apache.load.15")
     | summarize avg(value) by bin_auto(timestamp), metric_name
@@ -62,6 +81,7 @@ widgets:
     icon: activity
     layout:
       h: 2
+      min_width: null
       w: 3
       x: 6
       'y': 0
@@ -74,6 +94,7 @@ widgets:
     icon: swap
     layout:
       h: 2
+      min_width: null
       w: 3
       x: 3
       'y': 0
@@ -86,6 +107,7 @@ widgets:
     icon: list-tree
     layout:
       h: 2
+      min_width: null
       w: 3
       x: 0
       'y': 0
@@ -98,6 +120,7 @@ widgets:
     icon: clock
     layout:
       h: 2
+      min_width: null
       w: 3
       x: 9
       'y': 0
@@ -108,6 +131,7 @@ widgets:
     unit: days
   layout:
     h: 3
+    min_width: null
     w: 12
     x: 0
     'y': 0
@@ -115,8 +139,9 @@ widgets:
   type: group
 - layout:
     h: 4
+    min_width: null
     w: 6
-    x: 0
+    x: 6
     'y': 3
   query: metrics | where metric_name == "apache.requests" | summarize range(value)
     by bin_auto(timestamp)
@@ -125,8 +150,9 @@ widgets:
   unit: reqs
 - layout:
     h: 4
+    min_width: null
     w: 6
-    x: 0
+    x: 6
     'y': 7
   query: metrics | where metric_name == "apache.scoreboard" | summarize avg(value)
     by bin_auto(timestamp), attributes.state
@@ -135,9 +161,10 @@ widgets:
   unit: workers
 - layout:
     h: 4
+    min_width: null
     w: 6
-    x: 6
-    'y': 7
+    x: 0
+    'y': 11
   query: metrics | where metric_name == "apache.traffic" | summarize range(value)
     / 1048576 by bin_auto(timestamp)
   title: Traffic
@@ -147,9 +174,10 @@ widgets:
     find the slow handler.
   layout:
     h: 4
+    min_width: null
     w: 6
-    x: 6
-    'y': 3
+    x: 0
+    'y': 7
   query: metrics | where metric_name == "apache.workers" | summarize avg(value) by
     bin_auto(timestamp), attributes.state
   title: Workers (busy vs idle)
