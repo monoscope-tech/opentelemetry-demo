@@ -1486,13 +1486,14 @@ tabs:
         x: null
         'y': null
       sql: |
-        SELECT ROUND(AVG(value::numeric * 100), 1)::text || '%'
+        SELECT ROUND(AVG(value::numeric * 100), 1)::float8
         FROM otel_metrics
         WHERE project_id='{{project_id}}'
           AND metric_name IN ('container.cpu.utilization', 'process.cpu.utilization', 'jvm.cpu.recent_utilization')
           {{time_filter}}
       title: Avg CPU Utilization
       type: stat
+      unit: '%'
     - icon: hard-drive
       layout:
         h: 2
@@ -1500,13 +1501,14 @@ tabs:
         x: null
         'y': null
       sql: |
-        SELECT ROUND(AVG(value::numeric), 1)::text || '%'
+        SELECT ROUND(AVG(value::numeric), 1)::float8
         FROM otel_metrics
         WHERE project_id='{{project_id}}'
           AND metric_name = 'container.memory.percent'
           {{time_filter}}
       title: Avg Memory Usage
       type: stat
+      unit: '%'
     - icon: box
       layout:
         h: 2
@@ -1514,7 +1516,7 @@ tabs:
         x: null
         'y': null
       sql: |
-        SELECT COUNT(DISTINCT resource___container___name)::text
+        SELECT COUNT(DISTINCT resource___container___name)::float8
         FROM otel_metrics
         WHERE project_id='{{project_id}}'
           AND resource___container___name IS NOT NULL
@@ -1528,7 +1530,7 @@ tabs:
         x: null
         'y': null
       sql: |
-        SELECT COUNT(DISTINCT resource___service___name)::text
+        SELECT COUNT(DISTINCT resource___service___name)::float8
         FROM otel_metrics
         WHERE project_id='{{project_id}}'
           AND resource___service___name IS NOT NULL
