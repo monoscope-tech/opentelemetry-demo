@@ -132,15 +132,6 @@ widgets:
 - layout:
     h: 2
     w: 3
-    x: 3
-    'y': 6
-  query: |
-    summarize count() by bin_auto(timestamp)
-  title: W traces
-  type: traces
-- layout:
-    h: 2
-    w: 3
     x: 6
     'y': 6
   query: |
