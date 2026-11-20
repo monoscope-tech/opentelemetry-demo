@@ -21,11 +21,15 @@ discovery_metrics: null
 file: _overview.yaml
 icon: qrcode
 preview: /public/assets/svgs/screens/http-stats.svg
+read_only: null
 refresh_interval: 60s
+starred: null
 tabs:
 - icon: grid
+  link: null
   name: Overview
   requires: null
+  variables: null
   widgets:
   - children:
     - description: Request rate across inbound requests AND SDK-instrumented outbound
@@ -33,6 +37,7 @@ tabs:
       icon: activity
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -48,6 +53,7 @@ tabs:
       icon: clock
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -65,6 +71,7 @@ tabs:
       icon: alert-triangle
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -77,9 +84,10 @@ tabs:
       unit: '%'
     - description: Application Performance Index (0-1). Measures user satisfaction
         based on response times. >0.9 is excellent, <0.5 is poor.
-      icon: smile
+      icon: face-smile
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -95,6 +103,7 @@ tabs:
       systems: Traffic, Latency, Errors, and Saturation.'
     layout:
       h: 4
+      min_width: null
       w: 12
       x: null
       'y': null
@@ -104,6 +113,7 @@ tabs:
     - icon: server
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -116,6 +126,7 @@ tabs:
     - icon: list-tree
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -128,6 +139,7 @@ tabs:
     - icon: database
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -140,6 +152,7 @@ tabs:
     - icon: route
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -151,6 +164,7 @@ tabs:
       unit: endpoints
     layout:
       h: 2
+      min_width: null
       w: 12
       x: null
       'y': null
@@ -158,58 +172,78 @@ tabs:
     type: group
   - columns:
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: service_name
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: true
       title: Service
+      tooltip: null
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: apdex
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: true
       title: Apdex
+      tooltip: null
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: throughput
+      hidden: null
       link: null
       progress: column_percent
       progress_variant: null
       sortable: true
       title: Throughput
+      tooltip: null
       unit: req/min
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: error_rate
+      hidden: null
       link: null
       progress: value_percent
       progress_variant: error
       sortable: true
       title: Errors
+      tooltip: null
       unit: '%'
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: p95_latency
+      hidden: null
       link: null
       progress: column_percent
       progress_variant: null
       sortable: true
       title: P95
+      tooltip: null
       unit: ms
       width: null
     default_sort: COUNT(*)::numeric / GREATEST(1, EXTRACT(EPOCH FROM (MAX(timestamp)
@@ -217,6 +251,7 @@ tabs:
     description: Click a service row to view its detailed metrics in the Service tab.
     layout:
       h: 6
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -230,6 +265,7 @@ tabs:
     type: table
   - layout:
       h: 6
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -237,6 +273,7 @@ tabs:
     type: anomalies
   - layout:
       h: 4
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -250,6 +287,7 @@ tabs:
     unit: events
   - layout:
       h: 4
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -264,6 +302,7 @@ tabs:
     unit: errors
   - layout:
       h: 4
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -277,6 +316,7 @@ tabs:
     unit: reqs
   - layout:
       h: 4
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -290,6 +330,7 @@ tabs:
     unit: reqs
   - layout:
       h: 4
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -308,6 +349,7 @@ tabs:
     hide_subtitle: true
     layout:
       h: 4
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -321,53 +363,70 @@ tabs:
     unit: ns
   - columns:
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: db_system
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: true
       title: Database
+      tooltip: null
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: queries
+      hidden: null
       link: null
       progress: column_percent
       progress_variant: null
       sortable: true
       title: Queries
+      tooltip: null
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: avg_ms
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: true
       title: Avg
+      tooltip: null
       unit: ms
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: error_rate
+      hidden: null
       link: null
       progress: value_percent
       progress_variant: error
       sortable: true
       title: Errors
+      tooltip: null
       unit: '%'
       width: null
     default_sort: COUNT(*) DESC
     description: Click a database to view detailed metrics in the Databases tab.
     layout:
       h: 4
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -392,6 +451,7 @@ tabs:
     type: table
   - layout:
       h: 4
+      min_width: null
       w: 12
       x: null
       'y': null
@@ -418,6 +478,7 @@ tabs:
     id: 1b5f7962-bb8f-46d3-9e3f-f4f3c06c2781
     layout:
       h: 3
+      min_width: null
       w: 3
       x: null
       'y': null
@@ -425,13 +486,16 @@ tabs:
     type: timeseries
     unit: ms
 - icon: server
+  link: null
   name: Service
   requires: service
+  variables: null
   widgets:
   - children:
     - icon: list-tree
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -444,6 +508,7 @@ tabs:
     - icon: bug
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -456,6 +521,7 @@ tabs:
     - icon: activity
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -468,6 +534,7 @@ tabs:
     - icon: routes
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -479,6 +546,7 @@ tabs:
       unit: endpoints
     layout:
       h: 3
+      min_width: null
       w: 12
       x: null
       'y': null
@@ -486,6 +554,7 @@ tabs:
     type: group
   - layout:
       h: 3
+      min_width: null
       w: 4
       x: null
       'y': null
@@ -499,6 +568,7 @@ tabs:
     unit: reqs
   - layout:
       h: 3
+      min_width: null
       w: 4
       x: null
       'y': null
@@ -512,6 +582,7 @@ tabs:
     unit: ns
   - layout:
       h: 3
+      min_width: null
       w: 4
       x: null
       'y': null
@@ -526,6 +597,7 @@ tabs:
     unit: errors
   - layout:
       h: 4
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -541,6 +613,7 @@ tabs:
   - hide_subtitle: true
     layout:
       h: 4
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -554,6 +627,7 @@ tabs:
     unit: ns
   - layout:
       h: 4
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -569,6 +643,7 @@ tabs:
     unit: errors
   - layout:
       h: 4
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -609,69 +684,93 @@ tabs:
     unit: ns
   - columns:
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: resource_name
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: true
       title: Resource Name
+      tooltip: null
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: requests
+      hidden: null
       link: null
       progress: column_percent
       progress_variant: null
       sortable: true
       title: Requests
+      tooltip: null
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: total_time
+      hidden: null
       link: null
       progress: column_percent
       progress_variant: null
       sortable: true
       title: Total Time
+      tooltip: null
       unit: s
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: p95_latency
+      hidden: null
       link: null
       progress: column_percent
       progress_variant: null
       sortable: true
       title: P95 Latency
+      tooltip: null
       unit: ms
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: errors
+      hidden: null
       link: null
       progress: column_percent
       progress_variant: error
       sortable: true
       title: Errors
+      tooltip: null
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: error_rate
+      hidden: null
       link: null
       progress: value_percent
       progress_variant: error
       sortable: true
       title: Error Rate (%)
+      tooltip: null
       unit: null
       width: null
     default_sort: COUNT(*) DESC
@@ -679,6 +778,7 @@ tabs:
       charts above.
     layout:
       h: 5
+      min_width: null
       w: 12
       x: null
       'y': null
@@ -707,6 +807,7 @@ tabs:
     type: table
   - layout:
       h: 4
+      min_width: null
       w: 12
       x: null
       'y': null
@@ -744,6 +845,7 @@ tabs:
     unit: ns
   - layout:
       h: 5
+      min_width: null
       w: 12
       x: null
       'y': null
@@ -753,52 +855,69 @@ tabs:
     type: logs
   - columns:
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: resource_name
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: true
       title: Resource
+      tooltip: null
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: span_name
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: true
       title: Span
+      tooltip: null
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: avg_duration
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: true
       title: Avg Duration
+      tooltip: null
       unit: ms
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: span_count
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: true
       title: Trace Count
+      tooltip: null
       unit: null
       width: null
     default_sort: avg_duration DESC
     layout:
       h: 5
+      min_width: null
       w: 12
       x: null
       'y': null
@@ -822,58 +941,78 @@ tabs:
     type: table
   - columns:
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: operation_name
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: true
       title: Operation
+      tooltip: null
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: count
+      hidden: null
       link: null
       progress: column_percent
       progress_variant: null
       sortable: true
       title: Count
+      tooltip: null
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: error_rate
+      hidden: null
       link: null
       progress: value_percent
       progress_variant: error
       sortable: true
       title: Error Rate
+      tooltip: null
       unit: '%'
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: avg_duration
+      hidden: null
       link: null
       progress: column_percent
       progress_variant: null
       sortable: true
       title: Avg Duration
+      tooltip: null
       unit: ms
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: p95_duration
+      hidden: null
       link: null
       progress: column_percent
       progress_variant: null
       sortable: true
       title: P95 Duration
+      tooltip: null
       unit: ms
       width: null
     default_sort: COUNT(*) DESC
@@ -881,6 +1020,7 @@ tabs:
       calls, and internal operations.
     layout:
       h: 6
+      min_width: null
       w: 12
       x: null
       'y': null
@@ -903,13 +1043,16 @@ tabs:
     title: All Operations
     type: table
 - icon: file-text
+  link: null
   name: Logs
   requires: null
+  variables: null
   widgets:
   - children:
     - icon: file-text
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -923,6 +1066,7 @@ tabs:
       icon: alert-triangle
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -935,6 +1079,7 @@ tabs:
     - icon: alert-circle
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -947,6 +1092,7 @@ tabs:
     - icon: server
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -958,6 +1104,7 @@ tabs:
       unit: services
     layout:
       h: 4
+      min_width: null
       w: 12
       x: null
       'y': null
@@ -965,6 +1112,7 @@ tabs:
     type: group
   - layout:
       h: 4
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -977,6 +1125,7 @@ tabs:
     type: timeseries
   - layout:
       h: 4
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -1007,6 +1156,7 @@ tabs:
     type: timeseries
   - layout:
       h: 5
+      min_width: null
       w: 12
       x: null
       'y': null
@@ -1014,6 +1164,7 @@ tabs:
     type: anomalies
   - layout:
       h: 10
+      min_width: null
       w: 12
       x: null
       'y': null
@@ -1022,13 +1173,16 @@ tabs:
     title: Log Stream
     type: logs
 - icon: database
+  link: null
   name: Databases
   requires: database
+  variables: null
   widgets:
   - children:
     - icon: database
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -1042,6 +1196,7 @@ tabs:
       icon: alert-triangle
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -1055,6 +1210,7 @@ tabs:
     - icon: clock
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -1068,6 +1224,7 @@ tabs:
     - icon: turtle
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -1084,6 +1241,7 @@ tabs:
       unit: queries
     layout:
       h: 4
+      min_width: null
       w: 12
       x: null
       'y': null
@@ -1091,69 +1249,93 @@ tabs:
     type: group
   - columns:
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: query_pattern
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: true
       title: Query Pattern
+      tooltip: null
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: count
+      hidden: null
       link: null
       progress: column_percent
       progress_variant: null
       sortable: true
       title: Count
+      tooltip: null
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: avg_ms
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: true
       title: Avg
+      tooltip: null
       unit: ms
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: p95_ms
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: true
       title: P95
+      tooltip: null
       unit: ms
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: total_time
+      hidden: null
       link: null
       progress: column_percent
       progress_variant: null
       sortable: true
       title: Total Time
+      tooltip: null
       unit: s
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: error_rate
+      hidden: null
       link: null
       progress: value_percent
       progress_variant: error
       sortable: true
       title: Errors
+      tooltip: null
       unit: '%'
       width: null
     default_sort: SUM(duration) DESC
@@ -1161,6 +1343,7 @@ tabs:
       performance gains.
     layout:
       h: 7
+      min_width: null
       w: 12
       x: null
       'y': null
@@ -1190,53 +1373,70 @@ tabs:
     type: table
   - columns:
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: db_system
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: true
       title: Database
+      tooltip: null
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: operations
+      hidden: null
       link: null
       progress: column_percent
       progress_variant: null
       sortable: true
       title: Count
+      tooltip: null
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: avg_duration
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: true
       title: Avg
+      tooltip: null
       unit: ms
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: error_rate
+      hidden: null
       link: null
       progress: value_percent
       progress_variant: error
       sortable: true
       title: Errors
+      tooltip: null
       unit: '%'
       width: null
     default_sort: COUNT(*) DESC
     description: Click a database to filter all widgets on this tab.
     layout:
       h: 5
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -1261,52 +1461,69 @@ tabs:
     type: table
   - columns:
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: operation
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: true
       title: Operation
+      tooltip: null
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: count
+      hidden: null
       link: null
       progress: column_percent
       progress_variant: null
       sortable: true
       title: Count
+      tooltip: null
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: avg_ms
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: true
       title: Avg
+      tooltip: null
       unit: ms
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: error_rate
+      hidden: null
       link: null
       progress: value_percent
       progress_variant: error
       sortable: true
       title: Errors
+      tooltip: null
       unit: '%'
       width: null
     default_sort: COUNT(*) DESC
     layout:
       h: 5
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -1329,6 +1546,7 @@ tabs:
     type: table
   - layout:
       h: 4
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -1341,6 +1559,7 @@ tabs:
     unit: ns
   - layout:
       h: 4
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -1354,58 +1573,78 @@ tabs:
     unit: queries
   - columns:
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: query_pattern
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: true
       title: Query Pattern
+      tooltip: null
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: count
+      hidden: null
       link: null
       progress: column_percent
       progress_variant: null
       sortable: true
       title: Count
+      tooltip: null
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: max_ms
+      hidden: null
       link: null
       progress: column_percent
       progress_variant: null
       sortable: true
       title: Peak
+      tooltip: null
       unit: ms
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: avg_ms
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: true
       title: Avg
+      tooltip: null
       unit: ms
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: last_seen
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: true
       title: Last Seen
+      tooltip: null
       unit: null
       width: null
     default_sort: MAX(duration) DESC
@@ -1413,6 +1652,7 @@ tabs:
       Use Optimization Targets above for total-time impact.
     layout:
       h: 5
+      min_width: null
       w: 12
       x: null
       'y': null
@@ -1450,6 +1690,7 @@ tabs:
     type: table
   - layout:
       h: 4
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -1463,6 +1704,7 @@ tabs:
     type: timeseries
   - layout:
       h: 4
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -1475,13 +1717,16 @@ tabs:
     type: timeseries
     unit: queries
 - icon: server
+  link: null
   name: Infra
   requires: null
+  variables: null
   widgets:
   - children:
-    - icon: cpu
+    - icon: microchip
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -1497,6 +1742,7 @@ tabs:
     - icon: hard-drive
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -1512,6 +1758,7 @@ tabs:
     - icon: box
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -1523,9 +1770,10 @@ tabs:
           {{time_filter}}
       title: Container Count
       type: stat
-    - icon: layers
+    - icon: layer-group
       layout:
         h: 2
+        min_width: null
         w: 3
         x: null
         'y': null
@@ -1539,6 +1787,7 @@ tabs:
       type: stat
     layout:
       h: 4
+      min_width: null
       w: 12
       x: null
       'y': null
@@ -1546,6 +1795,7 @@ tabs:
     type: group
   - layout:
       h: 5
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -1566,6 +1816,7 @@ tabs:
     unit: '%'
   - layout:
       h: 5
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -1586,74 +1837,99 @@ tabs:
     unit: '%'
   - columns:
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: service
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: true
       title: Service/Container
+      tooltip: null
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: cpu_avg
+      hidden: null
       link: null
       progress: value_percent
       progress_variant: null
       sortable: true
       title: CPU Avg
+      tooltip: null
       unit: '%'
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: cpu_max
+      hidden: null
       link: null
       progress: value_percent
       progress_variant: warning
       sortable: true
       title: CPU Max
+      tooltip: null
       unit: '%'
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: mem_avg
+      hidden: null
       link: null
       progress: value_percent
       progress_variant: null
       sortable: true
       title: Mem Avg
+      tooltip: null
       unit: '%'
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: mem_max
+      hidden: null
       link: null
       progress: value_percent
       progress_variant: warning
       sortable: true
       title: Mem Max
+      tooltip: null
       unit: '%'
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: data_points
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: true
       title: Samples
+      tooltip: null
       unit: null
       width: null
     default_sort: AVG(c.value) DESC NULLS LAST
     layout:
       h: 6
+      min_width: null
       w: 12
       x: null
       'y': null
@@ -1692,6 +1968,7 @@ tabs:
     type: table
   - layout:
       h: 4
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -1712,6 +1989,7 @@ tabs:
     unit: partitions
   - layout:
       h: 4
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -1735,6 +2013,7 @@ tabs:
     type: timeseries
   - layout:
       h: 4
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -1755,41 +2034,54 @@ tabs:
     unit: MB
   - columns:
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: metric_name
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: null
       title: Metric
+      tooltip: null
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: data_points
+      hidden: null
       link: null
       progress: column_percent
       progress_variant: null
       sortable: true
       title: Data Points
+      tooltip: null
       unit: null
       width: null
     - align: null
-      clickable: null
       column_type: null
+      copyable: null
+      decimals: null
+      description: null
       field: unit
+      hidden: null
       link: null
       progress: null
       progress_variant: null
       sortable: true
       title: Unit
+      tooltip: null
       unit: null
       width: null
     default_sort: COUNT(*) DESC
     layout:
       h: 4
+      min_width: null
       w: 6
       x: null
       'y': null
@@ -1860,4 +2152,5 @@ variables:
       LIMIT 50
   title: Database System
   type: query
+views: null
 widgets: []
